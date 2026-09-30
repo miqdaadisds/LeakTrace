@@ -79,3 +79,33 @@ def test_dct_qim_watermarking():
     assert extracted.doc_id == doc_id
     assert extracted.recipient_id == recipient_id
     assert extracted.session_nonce == payload.session_nonce
+
+
+def test_pdf_steganography_and_extraction():
+    from app.core.pdf_generator import generate_sample_navy_pdf
+    from app.watermarking.pdf_stego import pdf_watermarker
+
+    # Generate real binary PDF
+    pdf_bytes = generate_sample_navy_pdf(
+        title="Operation Trishul Patrol Directive",
+        doc_id="DOC-NAVY-TEST-PDF-01",
+        classification="TOP SECRET // DEFENCE",
+        directive_body="1. Sector Alpha Fleet coordinates Lat 18 N, Long 72 E.\n2. EMCON Level Alpha active."
+    )
+    assert len(pdf_bytes) > 500
+
+    # Embed dynamic watermark into real PDF binary bytes
+    watermarked_pdf, payload = pdf_watermarker.embed_into_pdf_bytes(
+        pdf_bytes=pdf_bytes,
+        doc_id="DOC-NAVY-TEST-PDF-01",
+        recipient_id="DEF-NAVY-0842"
+    )
+    assert len(watermarked_pdf) > 500
+
+    # Extract watermark from the real PDF binary bytes
+    extracted = pdf_watermarker.extract_from_pdf_bytes(watermarked_pdf)
+    assert extracted is not None
+    assert extracted.doc_id == "DOC-NAVY-TEST-PDF-01"
+    assert extracted.recipient_id == "DEF-NAVY-0842"
+    assert extracted.session_nonce == payload.session_nonce
+    assert extracted.hmac_sig == payload.hmac_sig

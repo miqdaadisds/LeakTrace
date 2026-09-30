@@ -56,6 +56,20 @@ export const analyzeImageLeak = async (file) => {
   return res.data;
 };
 
+export const analyzePdfLeak = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await api.post('/api/forensics/analyze-pdf', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res.data;
+};
+
+export const getDecryptedPdfDownloadUrl = (docId, recipientId) => {
+  const base = api.defaults.baseURL || 'http://127.0.0.1:8000';
+  return `${base}/api/download-decrypted-pdf/${docId}/${recipientId}`;
+};
+
 export const watermarkImage = async (docId, recipientId, imageBase64) => {
   const res = await api.post('/api/forensics/watermark-image', {
     doc_id: docId,

@@ -42,6 +42,28 @@ def analyze_text_leak(req: TextLeakRequest):
     return result
 
 
+@router.post("/analyze-pdf", response_model=ForensicAttributionResult)
+async def analyze_pdf_leak(file: UploadFile = File(...)):
+    """
+    Extracts forensic watermark embedded in an uploaded leaked PDF file,
+    validates cryptographic integrity, and traces leaker via the blockchain ledger.
+    """
+    from app.watermarking.pdf_stego import pdf_watermarker
+    try:
+        pdf_bytes = await file.read()
+        payload = pdf_watermarker.extract_from_pdf_bytes(pdf_bytes)
+        if not payload:
+            return ForensicAttributionResult(
+                is_attributed=False,
+                confidence_score=0.0,
+                evidence_type="NONE",
+                forensic_summary="No valid NISHAN-PQ cryptographic forensic watermark detected in the uploaded PDF file."
+            )
+        return forensic_engine._attribute_payload(payload, evidence_type="PDF_STRUCTURAL_CARRIER")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"PDF forensic analysis failed: {str(e)}")
+
+
 @router.post("/analyze-image", response_model=ForensicAttributionResult)
 async def analyze_image_leak(file: UploadFile = File(...)):
     """

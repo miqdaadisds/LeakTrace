@@ -1,6 +1,7 @@
 """
 In-memory Application State & Pre-seeded Military Cryptographic Directory.
-Maintains enrolled officer identities, hybrid keypairs, and encrypted document storage.
+Maintains enrolled officer identities, hybrid keypairs, encrypted document storage,
+and real binary PDF document caches.
 """
 from typing import Dict, List, Optional
 import base64
@@ -11,6 +12,7 @@ from app.crypto.envelope import MultiRecipientEnvelope
 from app.core.types import RecipientProfile, EncryptedDocumentPackage
 from app.forensics.attribution_engine import forensic_engine
 from app.provenance.ledger import provenance_ledger
+from app.core.pdf_generator import generate_sample_navy_pdf
 
 
 class OfficerRecord:
@@ -53,7 +55,8 @@ class SystemState:
     def __init__(self):
         self.officers: Dict[str, OfficerRecord] = {}
         self.documents: Dict[str, EncryptedDocumentPackage] = {}
-        self.raw_documents_cache: Dict[str, str] = {} # For publisher view comparison
+        self.raw_documents_cache: Dict[str, str] = {}
+        self.pdf_cache: Dict[str, bytes] = {} # Real PDF file binary bytes
         self._initialize_officers()
         self._initialize_seed_documents()
 
@@ -137,6 +140,7 @@ class SystemState:
         )
         self.documents[doc1_id] = pkg1
         self.raw_documents_cache[doc1_id] = doc1_content
+        self.pdf_cache[doc1_id] = generate_sample_navy_pdf(doc1_title, doc1_id, doc1_class, doc1_content)
 
         doc2_id = "DOC-NAVY-2026-EW-CIPHER"
         doc2_title = "PROJECT 75I: Indigenous AIP Submarine Cryptographic Firmware Sign-off"
@@ -164,6 +168,7 @@ class SystemState:
         )
         self.documents[doc2_id] = pkg2
         self.raw_documents_cache[doc2_id] = doc2_content
+        self.pdf_cache[doc2_id] = generate_sample_navy_pdf(doc2_title, doc2_id, doc2_class, doc2_content)
 
     def get_all_profiles(self) -> List[RecipientProfile]:
         return [o.to_profile() for o in self.officers.values()]

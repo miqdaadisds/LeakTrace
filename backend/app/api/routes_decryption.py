@@ -113,3 +113,66 @@ def decrypt_document_endpoint(req: DecryptDocumentRequest):
         ledger_block_hash=block_hash,
         notice=f"CONFIDENTIAL: Attributed to {officer.name} [{req.recipient_id}]. Cryptographic receipt #{receipt_id} recorded in Blockchain Block #{block_index}."
     )
+
+
+@router.get("/download-decrypted-pdf/{doc_id}/{recipient_id}")
+def download_decrypted_pdf(doc_id: str, recipient_id: str):
+    """
+    Decodes the document and returns a real watermarked binary PDF file with dynamic steganography!
+    """
+    from fastapi import Response
+    from app.watermarking.pdf_stego import pdf_watermarker
+    from app.core.pdf_generator import generate_sample_navy_pdf
+
+    package = system_state.documents.get(doc_id)
+    if not package:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    officer = system_state.get_officer(recipient_id)
+    if not officer:
+        raise HTTPException(status_code=403, detail="Officer identity not enrolled.")
+
+    raw_pdf = system_state.pdf_cache.get(doc_id)
+    if not raw_pdf:
+        raw_text = system_state.raw_documents_cache.get(doc_id, package.title)
+        raw_pdf = generate_sample_navy_pdf(package.title, doc_id, package.classification, raw_text)
+        system_state.pdf_cache[doc_id] = raw_pdf
+
+    # 1. Embed dynamic watermark into real PDF binary bytes
+    decryption_time = time.time()
+    watermarked_pdf, wm_payload = pdf_watermarker.embed_into_pdf_bytes(
+        pdf_bytes=raw_pdf,
+        doc_id=doc_id,
+        recipient_id=recipient_id,
+        timestamp=decryption_time
+    )
+
+    # 2. Canonical watermark hash
+    wm_hash = hashlib.sha256(
+        f"{wm_payload.doc_id}|{wm_payload.recipient_id}|{int(wm_payload.timestamp)}|{wm_payload.session_nonce}".encode("utf-8")
+    ).hexdigest()
+
+    # 3. Sign receipt
+    receipt_id = f"RCPT-PDF-{uuid.uuid4().hex[:8].upper()}"
+    sign_payload = f"{receipt_id}|{doc_id}|{recipient_id}|{wm_hash}|TERMINAL-01|{int(decryption_time)}".encode("utf-8")
+    priv_sig = base64.b64decode(officer.priv_sig_b64)
+    sig_bytes = DigitalSignatureManager.sign(sign_payload, priv_sig)
+
+    receipt = DecryptionProvenanceReceipt(
+        receipt_id=receipt_id,
+        doc_id=doc_id,
+        recipient_id=recipient_id,
+        timestamp=decryption_time,
+        watermark_hash=wm_hash,
+        device_fingerprint=f"NAVY-TERMINAL-{recipient_id.split('-')[-1]}",
+        recipient_signature_b64=base64.b64encode(sig_bytes).decode("utf-8")
+    )
+    provenance_ledger.commit_receipt(receipt)
+
+    safe_name = officer.name.replace(' ', '_').replace('.', '')
+    filename = f"{doc_id}_{safe_name}_ATTRIBUTED.pdf"
+    return Response(
+        content=watermarked_pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
