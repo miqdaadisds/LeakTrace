@@ -1,7 +1,7 @@
 """
-In-memory Application State & Pre-seeded Military Cryptographic Directory.
-Maintains enrolled officer identities, hybrid keypairs, encrypted document storage,
-and real binary PDF document caches.
+In-memory Application State & Pre-seeded Cryptographic Directory.
+Maintains enrolled officer/user identities (Alice, Bob, Charlie), hybrid keypairs,
+encrypted document storage, and real binary PDF document caches.
 """
 from typing import Dict, List, Optional
 import base64
@@ -56,39 +56,39 @@ class SystemState:
         self.officers: Dict[str, OfficerRecord] = {}
         self.documents: Dict[str, EncryptedDocumentPackage] = {}
         self.raw_documents_cache: Dict[str, str] = {}
-        self.pdf_cache: Dict[str, bytes] = {} # Real PDF file binary bytes
+        self.pdf_cache: Dict[str, bytes] = {}
         self._initialize_officers()
         self._initialize_seed_documents()
 
     def _initialize_officers(self):
-        officer_specs = [
+        recipient_specs = [
+            (
+                "USER-BOB",
+                "Bob",
+                "Product Operations & Strategy",
+                "CONFIDENTIAL // RESTRICTED"
+            ),
+            (
+                "USER-ALICE",
+                "Alice",
+                "Engineering Architecture Lead",
+                "CONFIDENTIAL // RESTRICTED"
+            ),
+            (
+                "USER-CHARLIE",
+                "Charlie",
+                "Cryptographic Security Specialist",
+                "CONFIDENTIAL // RESTRICTED"
+            ),
             (
                 "DEF-NAVY-0842",
                 "Cdr. Rajesh Sharma",
-                "Western Naval Command (WNC) - INS Vikrant Ops",
+                "Western Naval Command - INS Vikrant Ops",
                 "TOP SECRET // OPERATIONAL"
-            ),
-            (
-                "DEF-NAVY-1109",
-                "Lt. Cdr. Priya Menon",
-                "Directorate of Naval Intelligence (DNI)",
-                "TOP SECRET // CRYPTO"
-            ),
-            (
-                "DEF-NAVY-0318",
-                "Capt. Vikram Sengupta",
-                "Eastern Fleet Headquarters (Visakhapatnam)",
-                "SECRET // MARITIME COMMAND"
-            ),
-            (
-                "DEF-NAVY-0771",
-                "Cdr. Arunava Roy",
-                "Weapons and Electronics Systems Engineering Establishment (WESEE)",
-                "TOP SECRET // R&D"
             ),
         ]
 
-        for r_id, name, unit, clearance in officer_specs:
+        for r_id, name, unit, clearance in recipient_specs:
             priv_x, pub_x, priv_pqc, pub_pqc = HybridPQCKEM.generate_keypair()
             priv_sig, pub_sig = DigitalSignatureManager.generate_keypair()
             
@@ -110,24 +110,22 @@ class SystemState:
     def _initialize_seed_documents(self):
         profiles = [o.to_profile() for o in self.officers.values()]
 
-        doc1_id = "DOC-NAVY-2026-OP-TRISHUL"
-        doc1_title = "OP TRISHUL: Western Seaboard Carrier Strike Group Patrol Grid & Intercept Coordinates"
-        doc1_class = "TOP SECRET // MARITIME STRIKE"
+        doc1_id = "DOC-2026-STRATEGY-ROADMAP"
+        doc1_title = "Confidential Q4 Strategic Product Roadmap & Architecture"
+        doc1_class = "CONFIDENTIAL // RESTRICTED ACCESS"
         doc1_content = (
-            "NAVAL OPERATIONAL ORDER: OP TRISHUL (OCT 2026)\n"
-            "CLASSIFICATION: TOP SECRET // OPERATIONAL STRICT EXCLUSIVE\n"
-            "ORIGINATING AUTHORITY: NAVAL HEADQUARTERS (WESEE / NHQ COMSEC)\n"
-            "TARGET FLEET: INS VIKRANT CARRIER BATTLE GROUP (CBG-01)\n\n"
-            "1. GRID DEPLOYMENT COORDINATES:\n"
-            "   Primary Patrol Box: Lat 18.9220 N, Long 72.8346 E to Lat 15.4989 N, Long 73.8278 E.\n"
-            "   Depth Vector: Sonar Active Pinging Band 3 (Acoustic Stealth Protocol P-75).\n\n"
-            "2. MARITIME INTERCEPTION PROTOCOLS:\n"
-            "   All unidentified surface vessels penetrating within 40 nautical miles of Sector Alpha\n"
-            "   are designated for visual reconnaissance by MiG-29K squadrons.\n"
-            "   Electronic Warfare Countermeasures: Maintain EMCON Level Alpha until zero-hour.\n\n"
-            "3. SECURE FREQUENCY HOPPING ASSIGNMENTS:\n"
-            "   Tactical Link: UHF Channel 9B, Key-Rotation Hash SHA3-512 interval 300 seconds.\n"
-            "   Failure to authenticate via cryptographic receipt will trigger automated quarantine."
+            "CONFIDENTIAL INTERNAL DIRECTIVE // DO NOT DISTRIBUTE OUTSIDE\n"
+            "TO: Alice (Engineering), Bob (Product), Charlie (Security)\n"
+            "ISSUING AUTHORITY: EXECUTIVE PROGRAM OFFICE\n\n"
+            "1. PROJECT ROADMAP & BUDGET ALLOCATION:\n"
+            "   Q4 strategic budget allocation of $2.4M is approved for next-gen deployment.\n"
+            "   Target release date is locked for November 15. All code freezes on October 30.\n\n"
+            "2. SECURITY & COMPLIANCE MANDATE:\n"
+            "   All endpoints must implement post-quantum cryptographic key encapsulation.\n"
+            "   No unauthorized unencrypted copies may be stored on unmanaged devices.\n\n"
+            "3. RECIPIENT ACCOUNTABILITY NOTICE:\n"
+            "   This document is protected by NISHAN-PQ cryptographic attribution.\n"
+            "   Opening this file embeds an invisible forensic watermark and logs a signed receipt."
         )
 
         pkg1 = MultiRecipientEnvelope.encrypt_document(
@@ -135,40 +133,12 @@ class SystemState:
             title=doc1_title,
             plaintext=doc1_content,
             classification=doc1_class,
-            publisher_id="WESEE-DIRECTORATE-DELHI",
+            publisher_id="HQ-CENTRAL-COMMAND",
             recipients=profiles
         )
         self.documents[doc1_id] = pkg1
         self.raw_documents_cache[doc1_id] = doc1_content
         self.pdf_cache[doc1_id] = generate_sample_navy_pdf(doc1_title, doc1_id, doc1_class, doc1_content)
-
-        doc2_id = "DOC-NAVY-2026-EW-CIPHER"
-        doc2_title = "PROJECT 75I: Indigenous AIP Submarine Cryptographic Firmware Sign-off"
-        doc2_class = "TOP SECRET // SCI-CRYPT"
-        doc2_content = (
-            "DEFENCE RESEARCH MEMORANDUM // WESEE TECHNICAL SPECIFICATION\n"
-            "PROJECT: INDIGENOUS AIP SUBMARINE CRYPTOGRAPHIC FIRMWARE V4.2\n"
-            "DISTRIBUTION: CHIEF OF NAVAL STAFF, WESEE, NHQ DNI\n\n"
-            "1. AIR-INDEPENDENT PROPULSION (AIP) ACOUSTIC TELEMETRY:\n"
-            "   The firmware utilizes dual-redundant post-quantum Kyber lattice key encapsulations\n"
-            "   for extremely low frequency (ELF) underwater communications.\n\n"
-            "2. CRYPTOGRAPHIC SIGN-OFF APPROVAL:\n"
-            "   All operational keys must undergo automated zero-knowledge attestation before\n"
-            "   dockside deployment at Mazagon Dock Shipbuilders Limited (MDL).\n"
-            "   This document is cryptographically guarded under SIH PS 26237 standards."
-        )
-
-        pkg2 = MultiRecipientEnvelope.encrypt_document(
-            doc_id=doc2_id,
-            title=doc2_title,
-            plaintext=doc2_content,
-            classification=doc2_class,
-            publisher_id="WESEE-DIRECTORATE-DELHI",
-            recipients=profiles
-        )
-        self.documents[doc2_id] = pkg2
-        self.raw_documents_cache[doc2_id] = doc2_content
-        self.pdf_cache[doc2_id] = generate_sample_navy_pdf(doc2_title, doc2_id, doc2_class, doc2_content)
 
     def get_all_profiles(self) -> List[RecipientProfile]:
         return [o.to_profile() for o in self.officers.values()]

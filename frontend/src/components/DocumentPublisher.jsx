@@ -3,23 +3,24 @@ import { Lock, FileText, Send, Users, Check, ShieldCheck, ArrowRight, Key, Downl
 import { publishDocument } from '../api';
 
 export default function DocumentPublisher({ officers, documents, onDocumentPublished, onGoToDecrypt }) {
-  const [title, setTitle] = useState('OPERATION VARUNA: Arabian Sea Naval Intercept Orders');
-  const [classification, setClassification] = useState('TOP SECRET // MARITIME STRIKE');
+  const [title, setTitle] = useState('Confidential Q4 Strategic Product Roadmap & Architecture');
+  const [classification, setClassification] = useState('CONFIDENTIAL // RESTRICTED ACCESS');
   const [plaintext, setPlaintext] = useState(
-`NAVAL HEADQUARTERS OPERATIONAL DIRECTIVE // IMMEDIATE EXECUTION
-TO: WESTERN FLEET COMMANDER, EASTERN FLEET COMMANDER, WESEE R&D
+`CONFIDENTIAL INTERNAL DIRECTIVE // DO NOT DISTRIBUTE OUTSIDE
+TO: Alice (Engineering), Bob (Product), Charlie (Security)
+ISSUING AUTHORITY: EXECUTIVE PROGRAM OFFICE
 
-1. GRID DEPLOYMENT:
-   INS Vikrant Carrier Battle Group to position at Lat 18.52 N, Long 71.90 E.
-   Maintain EMCON Level Alpha. Continuous passive acoustic sonar search across Band 3.
+1. PROJECT ROADMAP & BUDGET ALLOCATION:
+   Q4 strategic budget allocation of $2.4M is approved for next-gen deployment.
+   Target release date is locked for November 15. All code freezes on October 30.
 
-2. SUB-SURFACE THREAT PROTOCOL:
-   Unidentified contacts within 25 nautical miles designated for ASW vector interception.
-   Tactical frequency hopping interval: 250 milliseconds with SHA3-512 rotation.
+2. SECURITY & COMPLIANCE MANDATE:
+   All endpoints must implement post-quantum cryptographic key encapsulation.
+   No unauthorized unencrypted copies may be stored on unmanaged devices.
 
-3. FORENSIC NON-REPUDIATION ATTESTATION:
-   Client decryption dynamically embeds an invisible forensic mark.
-   Any digital leak will be mathematically linked to the decrypting workstation.`
+3. RECIPIENT ACCOUNTABILITY NOTICE:
+   This document is protected by NISHAN-PQ cryptographic attribution.
+   Opening this file embeds an invisible forensic watermark and logs a signed receipt.`
   );
   const [selectedOfficers, setSelectedOfficers] = useState(officers.map(o => o.recipient_id));
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -92,18 +93,17 @@ TO: WESTERN FLEET COMMANDER, EASTERN FLEET COMMANDER, WESEE R&D
                 onChange={(e) => setClassification(e.target.value)}
                 className="w-full bg-white/70 border border-slate-200/90 rounded-xl px-3 py-2 text-xs text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               >
-                <option>RESTRICTED // NAVAL DEFENCE</option>
-                <option>SECRET // MARITIME COMMAND</option>
-                <option>TOP SECRET // OPERATIONAL</option>
-                <option>TOP SECRET // MARITIME STRIKE</option>
+                <option>CONFIDENTIAL // RESTRICTED ACCESS</option>
+                <option>SECRET // INTERNAL USE ONLY</option>
+                <option>TOP SECRET // STRICT AUDIT</option>
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700">Publishing Node</label>
+              <label className="text-xs font-semibold text-slate-700">Publishing Authority</label>
               <input
                 type="text"
                 disabled
-                value="WESEE-DIRECTORATE-DELHI"
+                value="AIR-GAPPED-CENTRAL-NODE"
                 className="w-full bg-slate-100/70 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-500 font-mono"
               />
             </div>
@@ -113,7 +113,7 @@ TO: WESTERN FLEET COMMANDER, EASTERN FLEET COMMANDER, WESEE R&D
           <div className="space-y-1.5">
             <div className="flex justify-between items-center">
               <label className="text-xs font-semibold text-slate-700">
-                Authorized Commanders ({selectedOfficers.length} of {officers.length})
+                Authorized Recipients (Alice, Bob, Charlie) ({selectedOfficers.length} of {officers.length})
               </label>
               <span className="text-[11px] text-slate-400">Click to toggle</span>
             </div>
