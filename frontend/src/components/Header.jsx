@@ -25,7 +25,7 @@ export default function Header({ activeTab, setActiveTab, onRunQuickDemo, isRunn
               </span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
-              Ministry of Defence &bull; WESEE Indian Navy
+              SIH 2026 Problem Statement #237 &bull; Zero-Leak Provenance
             </p>
           </div>
         </div>

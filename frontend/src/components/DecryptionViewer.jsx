@@ -59,7 +59,7 @@ export default function DecryptionViewer({ officers, documents, onDecrypted, onS
         private_key_x25519_b64: credentials.private_key_x25519_b64,
         private_key_pqc_b64: credentials.private_key_pqc_b64,
         private_key_sig_b64: credentials.private_key_sig_b64,
-        device_fingerprint: `NAVY-TERMINAL-${credentials.recipient_id.split('-')[2]}`,
+        device_fingerprint: `WORKSTATION-${credentials.recipient_id}`,
       });
       setDecryptedResult(res);
       if (onDecrypted) onDecrypted(res);
@@ -99,7 +99,7 @@ export default function DecryptionViewer({ officers, documents, onDecrypted, onS
 
             <div>
               <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-                Officer Identity (Terminal Keyholder)
+                Choose Recipient (e.g. Bob, Alice, Charlie)
               </label>
               <select
                 value={selectedOfficerId}
@@ -108,7 +108,7 @@ export default function DecryptionViewer({ officers, documents, onDecrypted, onS
               >
                 {officers.map((o) => (
                   <option key={o.recipient_id} value={o.recipient_id}>
-                    {o.name} &bull; {o.recipient_id}
+                    {o.name} ({o.recipient_id})
                   </option>
                 ))}
               </select>
@@ -118,7 +118,7 @@ export default function DecryptionViewer({ officers, documents, onDecrypted, onS
               <div className="p-3 bg-slate-50/80 border border-slate-200 rounded-xl text-xs space-y-1.5">
                 <div className="font-bold text-slate-900">{credentials.name}</div>
                 <div className="text-[11px] text-slate-500">{credentials.unit}</div>
-                <div className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                <div className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                   {credentials.clearance}
                 </div>
               </div>
@@ -126,7 +126,7 @@ export default function DecryptionViewer({ officers, documents, onDecrypted, onS
 
             <div>
               <label className="text-xs font-semibold text-slate-700 block mb-1.5">
-                Select Order to Decrypt
+                Select Document to Decrypt
               </label>
               <select
                 value={selectedDocId}
@@ -147,7 +147,7 @@ export default function DecryptionViewer({ officers, documents, onDecrypted, onS
               className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs transition-all flex items-center justify-center space-x-2 shadow-sm disabled:opacity-50"
             >
               <LockOpen className="w-4 h-4" />
-              <span>{isDecrypting ? 'Decapsulating & Minting Provenance...' : 'Authorize Decryption & View'}</span>
+              <span>{isDecrypting ? 'Decapsulating & Minting Provenance...' : 'Open & Decrypt Document'}</span>
             </button>
 
             {error && (
@@ -246,7 +246,7 @@ export default function DecryptionViewer({ officers, documents, onDecrypted, onS
               <Cpu className="w-8 h-8 text-slate-300 mx-auto" />
               <div className="text-slate-700 font-semibold">Workstation Awaiting Decryption</div>
               <p className="max-w-md mx-auto text-slate-500 text-[11px]">
-                Select an officer and click &ldquo;Authorize Decryption&rdquo; to decrypt, inject the invisible mark, and anchor the receipt.
+                Select a recipient (e.g. Bob) and click &ldquo;Authorize Decryption&rdquo; to decrypt, inject the invisible mark, and anchor the receipt.
               </p>
             </div>
           )}

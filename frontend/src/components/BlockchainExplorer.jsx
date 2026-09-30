@@ -174,7 +174,7 @@ export default function BlockchainExplorer() {
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-slate-700">
                         <div>Doc: <span className="font-semibold text-slate-900">{rcpt.doc_id}</span></div>
-                        <div>Officer: <span className="font-semibold text-slate-900">{rcpt.recipient_id}</span></div>
+                        <div>Recipient: <span className="font-semibold text-slate-900">{rcpt.recipient_id}</span></div>
                       </div>
                       <div className="truncate text-slate-500">
                         H(WM): {rcpt.watermark_hash}
