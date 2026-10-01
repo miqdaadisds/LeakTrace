@@ -1,44 +1,48 @@
 """
-In-memory Application State & Pre-seeded Cryptographic Directory.
-Maintains enrolled officer/user identities (Alice, Bob, Charlie), hybrid keypairs,
-encrypted document storage, and real binary PDF document caches.
+Application State & Cryptographic Identity Directory for NISHAN-PQ (SIH26237).
+Maintains registered recipient public profiles (Alice, Bob, Charlie), their Argon2id encrypted
+credential vaults, active document packages, and cached .secure files.
+Plaintext private keys and user passphrases are NEVER stored in the system state.
 """
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import base64
-import time
+import hashlib
 from app.crypto.pqc_kem import HybridPQCKEM
 from app.crypto.pqc_sig import DigitalSignatureManager
+from app.crypto.vault import EncryptedCredentialVault
 from app.crypto.envelope import MultiRecipientEnvelope
-from app.core.types import RecipientProfile, EncryptedDocumentPackage
+from app.crypto.container import SecureContainerFormat
+from app.core.types import RecipientProfile
+from app.core.pdf_generator import generate_sample_navy_pdf
 from app.forensics.attribution_engine import forensic_engine
 from app.provenance.ledger import provenance_ledger
-from app.core.pdf_generator import generate_sample_navy_pdf
 
 
-class OfficerRecord:
+class RegisteredIdentity:
     def __init__(
         self,
         recipient_id: str,
         name: str,
         unit: str,
-        clearance: str,
-        priv_x25519: bytes,
         pub_x25519: bytes,
-        priv_pqc: bytes,
         pub_pqc: bytes,
-        priv_sig: bytes,
-        pub_sig: bytes
+        pub_sig: bytes,
+        encrypted_vault: Dict[str, Any]
     ):
         self.recipient_id = recipient_id
         self.name = name
         self.unit = unit
-        self.clearance = clearance
-        self.priv_x25519_b64 = base64.b64encode(priv_x25519).decode("utf-8")
+        self.pub_x25519_bytes = pub_x25519
+        self.pub_pqc_bytes = pub_pqc
+        self.pub_sig_bytes = pub_sig
         self.pub_x25519_b64 = base64.b64encode(pub_x25519).decode("utf-8")
-        self.priv_pqc_b64 = base64.b64encode(priv_pqc).decode("utf-8")
         self.pub_pqc_b64 = base64.b64encode(pub_pqc).decode("utf-8")
-        self.priv_sig_b64 = base64.b64encode(priv_sig).decode("utf-8")
         self.pub_sig_b64 = base64.b64encode(pub_sig).decode("utf-8")
+        self.encrypted_vault = encrypted_vault
+
+        # Compute public key SHA-256 fingerprint
+        combined_pub = pub_x25519 + pub_pqc + pub_sig
+        self.fingerprint = hashlib.sha256(combined_pub).hexdigest()[:16].upper()
 
     def to_profile(self) -> RecipientProfile:
         return RecipientProfile(
@@ -47,104 +51,182 @@ class OfficerRecord:
             unit=self.unit,
             public_key_x25519_b64=self.pub_x25519_b64,
             public_key_pqc_b64=self.pub_pqc_b64,
-            public_key_sig_b64=self.pub_sig_b64
+            public_key_sig_b64=self.pub_sig_b64,
+            fingerprint=self.fingerprint
         )
 
 
 class SystemState:
     def __init__(self):
-        self.officers: Dict[str, OfficerRecord] = {}
-        self.documents: Dict[str, EncryptedDocumentPackage] = {}
-        self.raw_documents_cache: Dict[str, str] = {}
-        self.pdf_cache: Dict[str, bytes] = {}
-        self._initialize_officers()
-        self._initialize_seed_documents()
+        self.identities: Dict[str, RegisteredIdentity] = {}
+        # doc_id -> raw PDF bytes
+        self.original_pdfs: Dict[str, bytes] = {}
+        # doc_id -> metadata
+        self.document_metadata: Dict[str, Dict[str, Any]] = {}
+        # (doc_id, recipient_id) -> .secure package bytes
+        self.secure_packages: Dict[str, bytes] = {}
+        # Pre-seed identities and sample document
+        self._initialize_seed_identities()
+        self._initialize_seed_distribution()
 
-    def _initialize_officers(self):
-        recipient_specs = [
-            (
-                "USER-BOB",
-                "Bob",
-                "Product Operations & Strategy",
-                "CONFIDENTIAL // RESTRICTED"
-            ),
+    def _initialize_seed_identities(self):
+        """
+        Pre-seeds registered identities for Alice, Bob, and Charlie.
+        Each recipient has genuine ML-KEM-768 and ML-DSA-65 key pairs.
+        Their private keys are encrypted into Argon2id vaults with strong passwords.
+        """
+        specs = [
             (
                 "USER-ALICE",
                 "Alice",
                 "Engineering Architecture Lead",
-                "CONFIDENTIAL // RESTRICTED"
+                "AliceSecure2026!"
+            ),
+            (
+                "USER-BOB",
+                "Bob",
+                "Product Operations & Strategy",
+                "BobSecure2026!"
             ),
             (
                 "USER-CHARLIE",
                 "Charlie",
                 "Cryptographic Security Specialist",
-                "CONFIDENTIAL // RESTRICTED"
-            ),
-            (
-                "DEF-NAVY-0842",
-                "Cdr. Rajesh Sharma",
-                "Western Naval Command - INS Vikrant Ops",
-                "TOP SECRET // OPERATIONAL"
+                "CharlieSecure2026!"
             ),
         ]
 
-        for r_id, name, unit, clearance in recipient_specs:
+        for r_id, name, unit, password in specs:
             priv_x, pub_x, priv_pqc, pub_pqc = HybridPQCKEM.generate_keypair()
             priv_sig, pub_sig = DigitalSignatureManager.generate_keypair()
-            
-            record = OfficerRecord(
+
+            # Encrypt private keys locally into vault
+            vault = EncryptedCredentialVault.create_vault(
+                password=password,
+                priv_kem_classical=priv_x,
+                priv_kem_pqc=priv_pqc,
+                priv_sig=priv_sig,
+                extra_metadata={"recipient_id": r_id, "name": name}
+            )
+
+            identity = RegisteredIdentity(
                 recipient_id=r_id,
                 name=name,
                 unit=unit,
-                clearance=clearance,
-                priv_x25519=priv_x,
                 pub_x25519=pub_x,
-                priv_pqc=priv_pqc,
                 pub_pqc=pub_pqc,
-                priv_sig=priv_sig,
-                pub_sig=pub_sig
+                pub_sig=pub_sig,
+                encrypted_vault=vault
             )
-            self.officers[r_id] = record
-            forensic_engine.register_officer(r_id, name, unit, clearance)
+            self.identities[r_id] = identity
 
-    def _initialize_seed_documents(self):
-        profiles = [o.to_profile() for o in self.officers.values()]
+            # Register public key with forensic engine
+            forensic_engine.register_recipient_identity(
+                recipient_id=r_id,
+                name=name,
+                unit=unit,
+                public_key_sig_b64=identity.pub_sig_b64
+            )
 
-        doc1_id = "DOC-2026-STRATEGY-ROADMAP"
-        doc1_title = "Confidential Q4 Strategic Product Roadmap & Architecture"
-        doc1_class = "CONFIDENTIAL // RESTRICTED ACCESS"
-        doc1_content = (
-            "CONFIDENTIAL INTERNAL DIRECTIVE // DO NOT DISTRIBUTE OUTSIDE\n"
-            "TO: Alice (Engineering), Bob (Product), Charlie (Security)\n"
-            "ISSUING AUTHORITY: EXECUTIVE PROGRAM OFFICE\n\n"
-            "1. PROJECT ROADMAP & BUDGET ALLOCATION:\n"
-            "   Q4 strategic budget allocation of $2.4M is approved for next-gen deployment.\n"
-            "   Target release date is locked for November 15. All code freezes on October 30.\n\n"
-            "2. SECURITY & COMPLIANCE MANDATE:\n"
-            "   All endpoints must implement post-quantum cryptographic key encapsulation.\n"
-            "   No unauthorized unencrypted copies may be stored on unmanaged devices.\n\n"
-            "3. RECIPIENT ACCOUNTABILITY NOTICE:\n"
-            "   This document is protected by NISHAN-PQ cryptographic attribution.\n"
-            "   Opening this file embeds an invisible forensic watermark and logs a signed receipt."
+    def _initialize_seed_distribution(self):
+        """
+        Synthesizes the reference document 'Confidential Q4 Strategic Product Roadmap',
+        encrypts it ONCE with AES-256-GCM, and packages it into individual .secure files
+        for Alice, Bob, and Charlie.
+        """
+        doc_id = "DOC-7F3A29B1"
+        title = "Confidential Q4 Strategic Product Roadmap"
+        classification = "CONFIDENTIAL // RESTRICTED"
+        original_filename = "DefencePlan-Q4-Roadmap.pdf"
+
+        body = (
+            "1. OPERATIONAL MANDATE: Full air-gapped cryptographic document distribution.\n"
+            "2. POST-QUANTUM ASSURANCE: NIST FIPS 203 ML-KEM-768 key encapsulation.\n"
+            "3. NON-REPUDIATION: NIST FIPS 204 ML-DSA-65 hardware-level digital signing.\n"
+            "4. FORENSIC ATTRIBUTION: Dynamic zero-width and structural watermarking.\n"
+            "5. DECENTRALIZED AUDIT: Multi-validator permissioned notary DLT quorum.\n"
+            "WARNING: All decryption sessions are cryptographically fingerprinted. Unlawful leaks are traceable."
         )
 
-        pkg1 = MultiRecipientEnvelope.encrypt_document(
-            doc_id=doc1_id,
-            title=doc1_title,
-            plaintext=doc1_content,
-            classification=doc1_class,
-            publisher_id="HQ-CENTRAL-COMMAND",
-            recipients=profiles
+        pdf_bytes = generate_sample_navy_pdf(title, doc_id, classification, body)
+        self.original_pdfs[doc_id] = pdf_bytes
+        self.document_metadata[doc_id] = {
+            "doc_id": doc_id,
+            "title": title,
+            "classification": classification,
+            "original_filename": original_filename,
+            "doc_hash_sha256": hashlib.sha256(pdf_bytes).hexdigest(),
+            "authorized_recipients": ["USER-ALICE", "USER-BOB", "USER-CHARLIE"]
+        }
+
+        # Encrypt ONCE
+        cek, encrypted_payload = MultiRecipientEnvelope.encrypt_document_bytes(
+            document_bytes=pdf_bytes,
+            doc_id=doc_id,
+            title=title,
+            classification=classification,
+            publisher_id="SECURE-PUBLISHER-HQ"
         )
-        self.documents[doc1_id] = pkg1
-        self.raw_documents_cache[doc1_id] = doc1_content
-        self.pdf_cache[doc1_id] = generate_sample_navy_pdf(doc1_title, doc1_id, doc1_class, doc1_content)
 
-    def get_all_profiles(self) -> List[RecipientProfile]:
-        return [o.to_profile() for o in self.officers.values()]
+        # Wrap for each recipient and generate .secure packages
+        for r_id in ["USER-ALICE", "USER-BOB", "USER-CHARLIE"]:
+            identity = self.identities[r_id]
+            wrapped_cek = MultiRecipientEnvelope.wrap_cek_for_recipient(
+                cek=cek,
+                recipient_id=r_id,
+                pub_x25519_bytes=identity.pub_x25519_bytes,
+                pub_pqc_bytes=identity.pub_pqc_bytes
+            )
 
-    def get_officer(self, recipient_id: str) -> Optional[OfficerRecord]:
-        return self.officers.get(recipient_id)
+            pkg = SecureContainerFormat.pack(
+                doc_id=doc_id,
+                title=title,
+                original_filename=original_filename,
+                classification=classification,
+                doc_hash_sha256=encrypted_payload["doc_hash_sha256"],
+                recipient_id=r_id,
+                recipient_name=identity.name,
+                recipient_public_kem_b64=identity.pub_pqc_b64,
+                recipient_public_sig_b64=identity.pub_sig_b64,
+                encrypted_vault=identity.encrypted_vault,
+                wrapped_cek=wrapped_cek,
+                encrypted_payload=encrypted_payload
+            )
+
+            pkg_key = f"{doc_id}:{r_id}"
+            self.secure_packages[pkg_key] = SecureContainerFormat.serialize_to_bytes(pkg)
+
+    def register_new_identity(self, recipient_id: str, name: str, unit: str, password: str) -> RegisteredIdentity:
+        """Enrolls a brand new recipient with generated ML-KEM + ML-DSA keys and Argon2id vault."""
+        priv_x, pub_x, priv_pqc, pub_pqc = HybridPQCKEM.generate_keypair()
+        priv_sig, pub_sig = DigitalSignatureManager.generate_keypair()
+
+        vault = EncryptedCredentialVault.create_vault(
+            password=password,
+            priv_kem_classical=priv_x,
+            priv_kem_pqc=priv_pqc,
+            priv_sig=priv_sig,
+            extra_metadata={"recipient_id": recipient_id, "name": name}
+        )
+
+        identity = RegisteredIdentity(
+            recipient_id=recipient_id,
+            name=name,
+            unit=unit,
+            pub_x25519=pub_x,
+            pub_pqc=pub_pqc,
+            pub_sig=pub_sig,
+            encrypted_vault=vault
+        )
+        self.identities[recipient_id] = identity
+
+        forensic_engine.register_recipient_identity(
+            recipient_id=recipient_id,
+            name=name,
+            unit=unit,
+            public_key_sig_b64=identity.pub_sig_b64
+        )
+        return identity
 
 
 system_state = SystemState()

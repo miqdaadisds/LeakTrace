@@ -1,181 +1,176 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import JudgeDemoGuide from './components/JudgeDemoGuide';
+import IdentityManager from './components/IdentityManager';
 import DocumentPublisher from './components/DocumentPublisher';
 import DecryptionViewer from './components/DecryptionViewer';
 import ForensicsConsole from './components/ForensicsConsole';
 import BlockchainExplorer from './components/BlockchainExplorer';
+
 import { 
   fetchSystemStatus, 
-  fetchOfficers, 
-  fetchDocuments, 
-  fetchOfficerCredentials,
-  decryptDocument 
+  fetchIdentities, 
+  fetchActiveDocuments, 
+  fetchLedgerBlocks,
+  decryptSecurePackage
 } from './api';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('publish');
   const [systemStatus, setSystemStatus] = useState(null);
-  const [officers, setOfficers] = useState([]);
-  const [documents, setDocuments] = useState([]);
-  const [simulatedLeakText, setSimulatedLeakText] = useState('');
+  const [identities, setIdentities] = useState([]);
+  const [activeDocs, setActiveDocs] = useState([]);
+  const [blocks, setBlocks] = useState([]);
+  const [preloadedPdfLeak, setPreloadedPdfLeak] = useState(null);
   const [autoAnalyzeTrigger, setAutoAnalyzeTrigger] = useState(false);
   const [isRunningDemo, setIsRunningDemo] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const loadInitialData = async () => {
+  const loadAllData = async () => {
     try {
-      const [status, officerList, docList] = await Promise.all([
+      const [status, idList, docList, blockList] = await Promise.all([
         fetchSystemStatus(),
-        fetchOfficers(),
-        fetchDocuments(),
+        fetchIdentities(),
+        fetchActiveDocuments(),
+        fetchLedgerBlocks(),
       ]);
       setSystemStatus(status);
-      setOfficers(officerList);
-      setDocuments(docList);
+      setIdentities(idList);
+      setActiveDocs(docList);
+      setBlocks(blockList);
     } catch (err) {
-      console.error('Failed to initialize state from backend:', err);
+      console.error('Failed to load initial data:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadInitialData();
+    loadAllData();
   }, []);
 
-  const handleSimulateLeak = (text) => {
-    setSimulatedLeakText(text);
+  const handleSendToForensics = (decryptionResult) => {
+    if (!decryptionResult || !decryptionResult.watermarked_pdf_base64) return;
+    
+    // Convert base64 to real binary PDF File object
+    const byteCharacters = atob(decryptionResult.watermarked_pdf_base64);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: 'application/pdf' });
+    const leakedPdfFile = new File([blob], `LEAKED_${decryptionResult.recipient_id}.pdf`, { type: 'application/pdf' });
+
+    setPreloadedPdfLeak(leakedPdfFile);
     setActiveTab('forensics');
   };
 
-  const handleDocumentPublished = async () => {
-    try {
-      const docList = await fetchDocuments();
-      setDocuments(docList);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleDecrypted = async () => {
-    try {
-      const status = await fetchSystemStatus();
-      setSystemStatus(status);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // 1-Click Interactive Judge Demo Walkthrough
+  // 1-Click 30s Live Demo Walkthrough for Hackathon Judges
   const handleRunQuickDemo = async () => {
-    if (officers.length === 0 || documents.length === 0) return;
     setIsRunningDemo(true);
-
     try {
-      // 1. Pick target officer: Cdr. Rajesh Sharma (DEF-NAVY-0842)
-      const officer = officers[0];
-      const doc = documents[0];
+      // Step 1: Open Decryption tab for Bob
+      setActiveTab('decrypt');
+      await new Promise((r) => setTimeout(r, 600));
 
-      // 2. Fetch credentials
-      const creds = await fetchOfficerCredentials(officer.recipient_id);
+      // Step 2: Decrypt locally as Bob using Bob's password
+      const formData = new FormData();
+      formData.append('doc_id', 'DOC-7F3A29B1');
+      formData.append('recipient_id', 'USER-BOB');
+      formData.append('password', 'BobSecure2026!');
+      formData.append('device_fingerprint', 'WORKSTATION-BOB-AIRGAP-NODE');
 
-      // 3. Decrypt document as officer (embeds invisible steganography and commits blockchain receipt)
-      const decryptRes = await decryptDocument({
-        doc_id: doc.doc_id,
-        recipient_id: creds.recipient_id,
-        private_key_x25519_b64: creds.private_key_x25519_b64,
-        private_key_pqc_b64: creds.private_key_pqc_b64,
-        private_key_sig_b64: creds.private_key_sig_b64,
-        device_fingerprint: `NAVY-TERMINAL-${creds.recipient_id.split('-')[2]}`,
-      });
+      const decRes = await decryptSecurePackage(formData);
+      
+      // Step 3: Convert Bob's real decrypted watermarked PDF to a file
+      const byteCharacters = atob(decRes.watermarked_pdf_base64);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/pdf' });
+      const leakedPdfFile = new File([blob], 'LEAKED_BOB_ROADMAP.pdf', { type: 'application/pdf' });
 
-      // 4. Simulate leak: transfer marked text to Forensics Lab
-      setSimulatedLeakText(decryptRes.plaintext_content);
+      // Step 4: Pass to Forensics and run audit
+      setPreloadedPdfLeak(leakedPdfFile);
       setActiveTab('forensics');
       setAutoAnalyzeTrigger(true);
-      setTimeout(() => setAutoAnalyzeTrigger(false), 1000);
+      setTimeout(() => setAutoAnalyzeTrigger(false), 800);
 
-      // Refresh system metrics
-      handleDecrypted();
+      // Refresh ledger blocks
+      const updatedBlocks = await fetchLedgerBlocks();
+      setBlocks(updatedBlocks);
     } catch (err) {
-      console.error('1-Click demo failed:', err);
+      console.error('Quick demo error:', err);
     } finally {
       setIsRunningDemo(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#FBFBFD] flex flex-col items-center justify-center space-y-4 font-sans text-slate-800">
-        <div className="w-10 h-10 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        <div className="text-sm font-semibold tracking-tight text-slate-700">
-          Loading NISHAN-PQ Prototype...
-        </div>
-        <div className="text-xs text-slate-400">
-          Initializing NIST FIPS 203 ML-KEM-768 Enclave &amp; Air-Gapped Ledger
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#FBFBFD] text-slate-900 flex flex-col font-sans">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-slate-50 to-blue-50 text-slate-900 flex flex-col font-sans">
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        onRunQuickDemo={handleRunQuickDemo}
+        isRunningDemo={isRunningDemo}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* 90-Second Judge Guided Walkthrough */}
-        <JudgeDemoGuide
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          onRunQuickDemo={handleRunQuickDemo}
-          isRunningDemo={isRunningDemo}
-        />
+        <JudgeDemoGuide activeTab={activeTab} setActiveTab={setActiveTab} />
 
-        {activeTab === 'publish' && (
-          <DocumentPublisher
-            officers={officers}
-            documents={documents}
-            onDocumentPublished={handleDocumentPublished}
-            onGoToDecrypt={() => setActiveTab('decrypt')}
-          />
-        )}
+        {loading ? (
+          <div className="apple-glass-card p-12 text-center text-slate-400 text-xs">
+            Loading secure defence enclave...
+          </div>
+        ) : (
+          <>
+            {activeTab === 'identities' && (
+              <IdentityManager
+                identities={identities}
+                onIdentityCreated={loadAllData}
+              />
+            )}
 
-        {activeTab === 'decrypt' && (
-          <DecryptionViewer
-            officers={officers}
-            documents={documents}
-            onDecrypted={handleDecrypted}
-            onSimulateLeak={handleSimulateLeak}
-            onGoToForensics={() => setActiveTab('forensics')}
-          />
-        )}
+            {activeTab === 'publish' && (
+              <DocumentPublisher
+                identities={identities}
+                activeDocs={activeDocs}
+                onDocumentPublished={loadAllData}
+                onGoToDecrypt={() => setActiveTab('decrypt')}
+              />
+            )}
 
-        {activeTab === 'forensics' && (
-          <ForensicsConsole
-            simulatedLeakText={simulatedLeakText}
-            autoAnalyzeTrigger={autoAnalyzeTrigger}
-          />
-        )}
+            {activeTab === 'decrypt' && (
+              <DecryptionViewer
+                identities={identities}
+                activeDocs={activeDocs}
+                onDecrypted={loadAllData}
+                onSendToForensics={handleSendToForensics}
+              />
+            )}
 
-        {activeTab === 'ledger' && (
-          <BlockchainExplorer />
+            {activeTab === 'forensics' && (
+              <ForensicsConsole
+                preloadedPdfLeak={preloadedPdfLeak}
+                autoAnalyzeTrigger={autoAnalyzeTrigger}
+              />
+            )}
+
+            {activeTab === 'ledger' && (
+              <BlockchainExplorer
+                blocks={blocks}
+                onRefreshBlocks={loadAllData}
+              />
+            )}
+          </>
         )}
       </main>
 
-      {/* Minimal Apple-Style Footer */}
-      <footer className="border-t border-slate-200/80 bg-white py-4 px-6 text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div>
-            Smart India Hackathon 2026 &bull; Problem Statement #26237 (PS 237)
-          </div>
-          <div className="text-slate-600 font-medium">
-            Ministry of Defence &bull; Weapons &amp; Electronics Systems Engineering Establishment (WESEE)
-          </div>
-        </div>
+      <footer className="border-t border-slate-200/60 bg-white/40 py-3 text-center text-[11px] text-slate-500">
+        NISHAN-PQ &bull; SIH 2026 Problem Statement #237 &bull; Weapons and Electronics Systems Engineering Establishment (WESEE)
       </footer>
     </div>
   );

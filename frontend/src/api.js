@@ -2,60 +2,88 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000',
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
+// System Status
 export const fetchSystemStatus = async () => {
   const res = await api.get('/api/system/status');
   return res.data;
 };
 
-export const fetchOfficers = async () => {
-  const res = await api.get('/api/officers');
+// 1. Identity Manager
+export const fetchIdentities = async () => {
+  const res = await api.get('/api/identities');
   return res.data;
 };
 
-export const fetchOfficerCredentials = async (recipientId) => {
-  const res = await api.get(`/api/officers/${recipientId}/credentials`);
+export const enrollIdentity = async ({ recipient_id, name, unit, password }) => {
+  const res = await api.post('/api/identities/enroll', {
+    recipient_id,
+    name,
+    unit,
+    password,
+  });
   return res.data;
 };
 
-export const fetchDocuments = async () => {
-  const res = await api.get('/api/documents');
+export const getRecipientVaultUrl = (recipientId) => {
+  return `${api.defaults.baseURL}/api/identities/${recipientId}/vault`;
+};
+
+// 2. Document Distributor
+export const fetchActiveDocuments = async () => {
+  const res = await api.get('/api/distribution/active-documents');
   return res.data;
 };
 
-export const fetchDocumentPackage = async (docId) => {
-  const res = await api.get(`/api/documents/${docId}`);
-  return res.data;
-};
-
-export const publishDocument = async (payload) => {
-  const res = await api.post('/api/documents', payload);
-  return res.data;
-};
-
-export const decryptDocument = async (payload) => {
-  const res = await api.post('/api/decrypt', payload);
-  return res.data;
-};
-
-export const analyzeTextLeak = async (leakedText) => {
-  const res = await api.post('/api/forensics/analyze-text', { leaked_text: leakedText });
-  return res.data;
-};
-
-export const analyzeImageLeak = async (file) => {
-  const formData = new FormData();
-  formData.append('file', file);
-  const res = await api.post('/api/forensics/analyze-image', formData, {
+export const encryptAndDistribute = async (formData) => {
+  const res = await api.post('/api/distribution/encrypt', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return res.data;
 };
 
+export const getSecurePackageDownloadUrl = (docId, recipientId) => {
+  return `${api.defaults.baseURL}/api/distribution/download-package/${docId}/${recipientId}`;
+};
+
+// 3. Recipient Workstation Decryption
+export const decryptSecurePackage = async (formData) => {
+  const res = await api.post('/api/recipient/decrypt', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res.data;
+};
+
+export const getDecryptedPdfDownloadUrl = (docId, recipientId) => {
+  return `${api.defaults.baseURL}/api/recipient/download-decrypted-pdf/${docId}/${recipientId}`;
+};
+
+// 4. Provenance & Multi-Validator DLT
+export const fetchLedgerBlocks = async () => {
+  const res = await api.get('/api/ledger/blocks');
+  return res.data;
+};
+
+export const verifyLedgerIntegrity = async () => {
+  const res = await api.get('/api/ledger/verify');
+  return res.data;
+};
+
+export const runTamperTest = async (blockIndex = 1, fakeRecipient = 'COMPROMISED-ATTACKER') => {
+  const res = await api.post('/api/ledger/tamper-test', {
+    block_index: blockIndex,
+    fake_recipient: fakeRecipient,
+  });
+  return res.data;
+};
+
+export const fetchValidators = async () => {
+  const res = await api.get('/api/ledger/validators');
+  return res.data;
+};
+
+// 5. Forensics Lab
 export const analyzePdfLeak = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -65,28 +93,7 @@ export const analyzePdfLeak = async (file) => {
   return res.data;
 };
 
-export const getDecryptedPdfDownloadUrl = (docId, recipientId) => {
-  const base = api.defaults.baseURL || 'http://127.0.0.1:8000';
-  return `${base}/api/download-decrypted-pdf/${docId}/${recipientId}`;
-};
-
-export const watermarkImage = async (docId, recipientId, imageBase64) => {
-  const res = await api.post('/api/forensics/watermark-image', {
-    doc_id: docId,
-    recipient_id: recipientId,
-    image_base64: imageBase64,
-  });
+export const analyzeTextLeak = async (leakedText) => {
+  const res = await api.post('/api/forensics/analyze-text', { leaked_text: leakedText });
   return res.data;
 };
-
-export const fetchBlockchainBlocks = async () => {
-  const res = await api.get('/api/ledger/blocks');
-  return res.data;
-};
-
-export const verifyBlockchain = async () => {
-  const res = await api.get('/api/ledger/verify');
-  return res.data;
-};
-
-export default api;

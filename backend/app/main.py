@@ -1,34 +1,36 @@
 """
-Indian Navy WESEE Cryptographic Attribution & Decryption Provenance System
+Cryptographic Attribution & Immutable Decryption Provenance for Multi-Recipient Encrypted Document Distribution
 Smart India Hackathon (SIH) 2026 - Problem Statement No. 237 (ID: 26237).
+Organization: Ministry of Defence (WESEE).
 
 Main FastAPI Application Entrypoint.
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import settings
-from app.api.routes_documents import router as documents_router
-from app.api.routes_decryption import router as decryption_router
+from app.api.routes_identity import router as identity_router
+from app.api.routes_distribution import router as distribution_router
+from app.api.routes_recipient import router as recipient_router
 from app.api.routes_forensics import router as forensics_router
 from app.api.routes_ledger import router as ledger_router
 from app.core.state import system_state
 from app.provenance.ledger import provenance_ledger
 
 app = FastAPI(
-    title="WESEE Cryptographic Attribution & Provenance System",
+    title="NISHAN-PQ: Cryptographic Attribution & Provenance System",
     description=(
-        "Production-grade reference implementation for SIH 2026 Problem Statement #26237 "
-        "(Ministry of Defence - Indian Navy WESEE). Features hybrid Post-Quantum ML-KEM-768 "
-        "envelope distribution, decryption-time steganographic watermarking (Text Zero-Width & "
-        "Visual 2D DCT-QIM), and an immutable Merkle blockchain ledger for forensic leak non-repudiation."
+        "Production-grade implementation for SIH 2026 Problem Statement #26237 "
+        "(Ministry of Defence - WESEE). Features NIST FIPS 203 ML-KEM-768 hybrid envelope "
+        "distribution, Argon2id protected credential vaults, local recipient decryption, "
+        "dynamic forensic watermarking, NIST FIPS 204 ML-DSA-65 non-repudiation signing, "
+        "and multi-validator permissioned DLT for immutable leak attribution."
     ),
-    version="1.0.0",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc"
 )
 
-# CORS configuration for seamless frontend communication
+# CORS configuration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -37,9 +39,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register decoupled modular routers
-app.include_router(documents_router)
-app.include_router(decryption_router)
+# Register modular routes
+app.include_router(identity_router)
+app.include_router(distribution_router)
+app.include_router(recipient_router)
 app.include_router(forensics_router)
 app.include_router(ledger_router)
 
@@ -47,36 +50,36 @@ app.include_router(ledger_router)
 @app.get("/")
 def root():
     return {
-        "system": "Indian Navy WESEE Cryptographic Attribution & Provenance System",
+        "system": "NISHAN-PQ Cryptographic Attribution & Provenance Enclave",
         "sih_problem_statement": "SIH 2026 PS No. 237 (ID: 26237)",
-        "organization": "Ministry of Defence / Weapons & Electronics Systems Engineering Establishment (WESEE)",
-        "theme": "Blockchain & Cybersecurity",
-        "status": "OPERATIONAL // GREEN",
-        "pqc_standards": ["NIST FIPS 203 ML-KEM-768", "X25519 Hybrid", "AES-256-GCM"],
-        "steganography": ["Text Zero-Width Unicode Stego", "Visual 2D DCT-QIM"],
-        "ledger": "SHA-256 Merkle-Chained Provenance Blockchain",
+        "organization": "Ministry of Defence / WESEE",
+        "theme": "Blockchain & Post-Quantum Cybersecurity",
+        "status": "OPERATIONAL // ZERO-LEAK ASSURANCE",
+        "pqc_standards": {
+            "key_encapsulation": "NIST FIPS 203 ML-KEM-768 + X25519",
+            "digital_signatures": "NIST FIPS 204 ML-DSA-65",
+            "symmetric_cipher": "AES-256-GCM (O(1) single ciphertext)",
+            "credential_vault_kdf": "Argon2id (Memory-Hard Password Protection)"
+        },
+        "provenance_dlt": "Multi-Validator Notary Consensus (3 Independent Offline Nodes)",
+        "watermarking": "Dynamic Recipient-Session Structural PDF & Zero-Width Content Injection",
         "docs_url": "/docs"
     }
 
 
 @app.get("/api/system/status")
 def system_status():
-    blocks = provenance_ledger.get_blocks()
-    officers = system_state.get_all_profiles()
-    docs = list(system_state.documents.values())
-
+    is_valid, msg, _ = provenance_ledger.verify_chain_integrity()
     return {
         "status": "ONLINE",
-        "pqc_kem_algorithm": "ML-KEM-768 + X25519 (Hybrid)",
+        "pqc_kem_algorithm": "NIST FIPS 203 ML-KEM-768",
+        "pqc_sig_algorithm": "NIST FIPS 204 ML-DSA-65",
         "symmetric_cipher": "AES-256-GCM",
-        "signature_scheme": "Ed25519 / ML-DSA",
-        "officers_enrolled": len(officers),
-        "documents_active": len(docs),
-        "blockchain_blocks_count": len(blocks),
-        "ledger_verified": provenance_ledger.verify_chain_integrity()[0]
+        "kdf": "Argon2id",
+        "recipients_enrolled": len(system_state.identities),
+        "documents_active": len(system_state.document_metadata),
+        "packages_active": len(system_state.secure_packages),
+        "blockchain_blocks_count": len(provenance_ledger.get_chain()),
+        "ledger_verified": is_valid,
+        "notary_quorum_status": "2-of-3 Quorum Active"
     }
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host=settings.API_HOST, port=settings.API_PORT, reload=True)

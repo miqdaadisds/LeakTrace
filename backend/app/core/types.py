@@ -9,32 +9,21 @@ import time
 
 
 class RecipientProfile(BaseModel):
-    recipient_id: str = Field(..., description="Unique defence officer/command identifier, e.g. DEF-NAVY-0842")
-    name: str = Field(..., description="Officer rank and full name")
-    unit: str = Field(..., description="Naval Command / Flotilla / Ship Unit")
+    recipient_id: str = Field(..., description="Unique defence officer/user identifier, e.g. USER-BOB")
+    name: str = Field(..., description="Full name or operational callsign")
+    unit: str = Field(..., description="Department, Team, or Military Command")
     public_key_x25519_b64: str = Field(..., description="Classical ECDH public key (Base64)")
     public_key_pqc_b64: str = Field(..., description="Post-Quantum ML-KEM-768 public key (Base64)")
-    public_key_sig_b64: str = Field(..., description="Digital signature verification key Ed25519/ML-DSA (Base64)")
+    public_key_sig_b64: str = Field(..., description="Digital signature verification key ML-DSA-65 (Base64)")
+    fingerprint: Optional[str] = Field(None, description="SHA-256 fingerprint of public keys")
 
 
 class EncryptedKeyWrap(BaseModel):
     recipient_id: str
-    encapsulated_key_b64: str = Field(..., description="PQC + ECDH KEM ciphertext")
+    kem_ciphertext_b64: str = Field(..., description="ML-KEM-768 + X25519 KEM ciphertext")
     wrapped_cek_b64: str = Field(..., description="AES-256-GCM wrapped Content Encryption Key")
+    wrap_nonce_b64: str = Field(..., description="Nonce for CEK wrapping")
     tag_b64: str = Field(..., description="GCM authentication tag for key unwrap")
-
-
-class EncryptedDocumentPackage(BaseModel):
-    doc_id: str
-    title: str
-    classification: str = "RESTRICTED // NAVAL DEFENCE"
-    publisher_id: str
-    ciphertext_b64: str
-    nonce_b64: str
-    aad: str
-    recipient_wraps: List[EncryptedKeyWrap]
-    created_at: float = Field(default_factory=time.time)
-    doc_hash_sha256: str
 
 
 class WatermarkPayload(BaseModel):
@@ -43,16 +32,22 @@ class WatermarkPayload(BaseModel):
     timestamp: float
     session_nonce: str
     hmac_sig: str
+    session_id: Optional[str] = None
+    watermark_id: Optional[str] = None
 
 
 class DecryptionProvenanceReceipt(BaseModel):
     receipt_id: str
     doc_id: str
     recipient_id: str
+    session_id: str
+    watermark_id: str
+    ciphertext_hash: str
     timestamp: float = Field(default_factory=time.time)
-    watermark_hash: str
     device_fingerprint: str
     recipient_signature_b64: str
+    recipient_public_key_sig_b64: str
+    event_digest: str
 
 
 class ProvenanceBlock(BaseModel):
@@ -61,42 +56,27 @@ class ProvenanceBlock(BaseModel):
     previous_hash: str
     merkle_root: str
     receipts: List[DecryptionProvenanceReceipt]
+    validator_signatures: List[Dict[str, str]] = []
     block_hash: str
-
-
-class DecryptDocumentRequest(BaseModel):
-    doc_id: str
-    recipient_id: str
-    private_key_x25519_b64: str
-    private_key_pqc_b64: Optional[str] = None
-    private_key_sig_b64: str
-    device_fingerprint: str = "NAVY-WORKSTATION-SECURE-NODE-04"
-
-
-class DecryptedDocumentResponse(BaseModel):
-    doc_id: str
-    title: str
-    classification: str
-    plaintext_content: str  # Contains dynamic invisible zero-width watermark
-    watermark_payload: WatermarkPayload
-    receipt: DecryptionProvenanceReceipt
-    ledger_block_index: int
-    ledger_block_hash: str
-    notice: str = "Document cryptographically attributed to your identity. All leaks are mathematically traceable."
 
 
 class ForensicAttributionResult(BaseModel):
     is_attributed: bool
     doc_id: Optional[str] = None
-    leaker_id: Optional[str] = None
-    leaker_name: Optional[str] = None
-    leaker_unit: Optional[str] = None
+    doc_title: Optional[str] = None
+    recipient_id: Optional[str] = None
+    recipient_name: Optional[str] = None
+    recipient_unit: Optional[str] = None
+    session_id: Optional[str] = None
+    watermark_id: Optional[str] = None
     decryption_timestamp: Optional[float] = None
     decryption_time_str: Optional[str] = None
-    session_nonce: Optional[str] = None
-    hmac_verified: bool = False
+    evidence_type: str = "PDF_STRUCTURAL_CARRIER"
+    watermark_status: str = "NOT_FOUND"  # "MATCHED", "CORRUPTED", "NOT_FOUND"
+    signature_status: str = "UNVERIFIED"  # "VALID", "INVALID", "UNVERIFIED"
+    ledger_status: str = "UNVERIFIED"     # "VALID", "INVALID", "UNVERIFIED"
     ledger_block_index: Optional[int] = None
-    ledger_merkle_verified: bool = False
-    confidence_score: float = Field(..., ge=0.0, le=1.0)
-    evidence_type: str  # "TEXT_ZERO_WIDTH" or "IMAGE_DCT_QIM" or "NONE"
+    merkle_root: Optional[str] = None
+    validator_quorum_status: Optional[str] = None
     forensic_summary: str
+    detailed_evidence: Dict[str, Any] = {}

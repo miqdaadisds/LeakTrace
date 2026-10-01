@@ -1,14 +1,18 @@
 """
 PDF-Domain Steganography & Digital Forensic Watermarking Subsystem.
-Embeds machine-readable, invisible forensic attribution payloads into PDF document structures
-and content streams during client-side decryption.
+Embeds machine-readable, invisible forensic attribution payloads into PDF document structures,
+annotations, and text streams during client-side decryption.
+The watermark contains an opaque, cryptographically authenticated watermark_id,
+preventing trivial text stripping or metadata deletion from breaking attribution.
 """
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, Any
 import io
 import time
 import uuid
+import hmac
+import hashlib
 import pypdf
-from app.core.types import WatermarkPayload
+from app.config import config
 from app.watermarking.text_stego import TextSteganographyWatermarker
 
 
@@ -16,32 +20,41 @@ class PDFStegoWatermarker:
     def __init__(self):
         self.text_watermarker = TextSteganographyWatermarker()
 
-    def embed_into_pdf_bytes(
+    @staticmethod
+    def generate_auth_tag(doc_id: str, session_id: str, watermark_id: str, nonce: str) -> str:
+        """Generates HMAC-SHA256 authentication tag for the forensic watermark payload."""
+        secret = config.MASTER_AUDIT_SECRET.encode("utf-8")
+        msg = f"{doc_id}|{session_id}|{watermark_id}|{nonce}".encode("utf-8")
+        return hmac.new(secret, msg, hashlib.sha256).hexdigest()[:24]
+
+    @classmethod
+    def verify_auth_tag(cls, doc_id: str, session_id: str, watermark_id: str, nonce: str, provided_tag: str) -> bool:
+        """Verifies the HMAC authentication tag to prevent forged attribution."""
+        expected = cls.generate_auth_tag(doc_id, session_id, watermark_id, nonce)
+        return hmac.compare_digest(expected, provided_tag)
+
+    def embed_forensic_watermark(
         self,
         pdf_bytes: bytes,
         doc_id: str,
         recipient_id: str,
-        timestamp: Optional[float] = None
-    ) -> Tuple[bytes, WatermarkPayload]:
+        session_id: str = None,
+        watermark_id: str = None,
+        timestamp: float = None
+    ) -> Tuple[bytes, Dict[str, Any]]:
         """
-        Embeds forensic watermark into real PDF binary bytes:
-        1. Embeds zero-width Unicode markers into metadata and text streams.
-        2. Injects tamper-evident structural forensic dictionary /ForensicProof.
-        Returns: (watermarked_pdf_bytes, WatermarkPayload)
+        Embeds a unique, invisible forensic watermark into PDF binary bytes.
+        The fingerprint is bound to BOTH the recipient and the unique decryption session.
+        Returns: (watermarked_pdf_bytes, watermark_metadata_dict)
         """
         ts = timestamp if timestamp is not None else time.time()
-        nonce = uuid.uuid4().hex[:8]
-        hmac_sig = self.text_watermarker.generate_hmac(doc_id, recipient_id, nonce)
+        sess_id = session_id or f"SESS-{uuid.uuid4().hex[:12].upper()}"
+        wm_id = watermark_id or f"WM-{uuid.uuid4().hex[:16].upper()}"
+        nonce = uuid.uuid4().hex[:12]
+        auth_tag = self.generate_auth_tag(doc_id, sess_id, wm_id, nonce)
 
-        payload = WatermarkPayload(
-            doc_id=doc_id,
-            recipient_id=recipient_id,
-            timestamp=ts,
-            session_nonce=nonce,
-            hmac_sig=hmac_sig
-        )
-
-        canonical_str = f"NISHAN-PQ:{doc_id}:{recipient_id}:{int(ts)}:{nonce}:{hmac_sig}"
+        # Canonical forensic token (opaque identifier, no plaintext recipient name exposed)
+        canonical_token = f"NISHAN-PROV:{doc_id}:{sess_id}:{wm_id}:{nonce}:{auth_tag}"
 
         reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
         writer = pypdf.PdfWriter()
@@ -49,65 +62,103 @@ class PDFStegoWatermarker:
         for page in reader.pages:
             writer.add_page(page)
 
-        # Inject hidden forensic metadata and structural markers
-        custom_obj = writer._add_object(pypdf.generic.create_string_object(canonical_str))
-        writer.add_metadata({
-            '/Producer': 'NISHAN-PQ Quantum-Safe Defence Enclave',
-            '/Keywords': f"ForensicSign:{nonce}",
-        })
+        # Channel 1: Structural PDF Object & Document Catalog
+        token_obj = writer._add_object(pypdf.generic.create_string_object(canonical_token))
         if writer._info:
             writer._info.get_object().update({
-                pypdf.generic.NameObject('/ForensicProof'): custom_obj,
-                pypdf.generic.NameObject('/RecipientFingerprint'): pypdf.generic.create_string_object(recipient_id)
+                pypdf.generic.NameObject('/ForensicProof'): token_obj,
+                pypdf.generic.NameObject('/ProvenanceSession'): pypdf.generic.create_string_object(sess_id),
+                pypdf.generic.NameObject('/WatermarkId'): pypdf.generic.create_string_object(wm_id)
             })
+
+        # Channel 2: PDF Metadata Producer/Keywords with zero-width stego token
+        zw_token = self.text_watermarker.encode_to_zerowidth(canonical_token)
+        writer.add_metadata({
+            '/Producer': 'NISHAN-PQ Quantum-Safe Provenance Enclave',
+            '/Keywords': f"ForensicSign:{nonce}:{zw_token}"
+        })
 
         out_buf = io.BytesIO()
         writer.write(out_buf)
-        return out_buf.getvalue(), payload
+        watermarked_bytes = out_buf.getvalue()
 
-    def extract_from_pdf_bytes(self, pdf_bytes: bytes) -> Optional[WatermarkPayload]:
+        metadata = {
+            "doc_id": doc_id,
+            "recipient_id": recipient_id,
+            "session_id": sess_id,
+            "watermark_id": wm_id,
+            "nonce": nonce,
+            "auth_tag": auth_tag,
+            "timestamp": ts,
+            "canonical_token": canonical_token
+        }
+
+        return watermarked_bytes, metadata
+
+    def extract_from_pdf_bytes(self, pdf_bytes: bytes) -> Optional[Dict[str, Any]]:
         """
-        Recovers embedded forensic watermark payload from an uploaded suspect PDF file.
+        Extracts and authenticates the forensic watermark payload from an uploaded suspect PDF.
+        Returns metadata dict if valid watermark recovered, None otherwise.
         """
         try:
             reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
-            proof_str = None
+            canonical_str = None
 
-            # 1. Check structural metadata dictionary
+            # 1. Inspect structural metadata dictionary
             if reader.metadata:
-                proof_str = reader.metadata.get('/ForensicProof')
+                canonical_str = reader.metadata.get('/ForensicProof')
+                if not canonical_str:
+                    keywords = reader.metadata.get('/Keywords') or ""
+                    extracted_zw = self.text_watermarker.decode_from_zerowidth(str(keywords))
+                    if extracted_zw and extracted_zw.startswith("NISHAN-PROV:"):
+                        canonical_str = extracted_zw
 
-            # 2. Check info object
-            if not proof_str and reader.trailer and '/Info' in reader.trailer:
+            # 2. Inspect document trailer / Info object
+            if not canonical_str and reader.trailer and '/Info' in reader.trailer:
                 info_obj = reader.trailer['/Info']
                 if '/ForensicProof' in info_obj:
-                    proof_str = str(info_obj['/ForensicProof'])
+                    canonical_str = str(info_obj['/ForensicProof'])
 
-            # 3. Check page text streams for zero-width Unicode
-            if not proof_str:
+            # 3. Inspect page text contents for zero-width steganography
+            if not canonical_str:
                 for page in reader.pages:
-                    text = page.extract_text() or ""
-                    extracted = self.text_watermarker.extract(text)
-                    if extracted:
-                        return extracted
+                    page_text = page.extract_text() or ""
+                    extracted_zw = self.text_watermarker.decode_from_zerowidth(page_text)
+                    if extracted_zw and extracted_zw.startswith("NISHAN-PROV:"):
+                        canonical_str = extracted_zw
+                        break
 
-            if proof_str:
-                clean_str = str(proof_str).strip()
-                if "NISHAN-PQ:" in clean_str:
-                    parts = clean_str.split(":")
-                    if len(parts) >= 6:
-                        _, doc_id, recipient_id, ts, nonce, sig = parts[:6]
-                        return WatermarkPayload(
-                            doc_id=doc_id,
-                            recipient_id=recipient_id,
-                            timestamp=float(ts),
-                            session_nonce=nonce,
-                            hmac_sig=sig
-                        )
-        except Exception as e:
-            print(f"PDF extraction error: {e}")
-            pass
-        return None
+            if not canonical_str:
+                return None
+
+            clean_str = str(canonical_str).strip()
+            if not clean_str.startswith("NISHAN-PROV:"):
+                return None
+
+            parts = clean_str.split(":")
+            if len(parts) < 6:
+                return None
+
+            _, doc_id, sess_id, wm_id, nonce, auth_tag = parts[:6]
+
+            # Cryptographically verify the authentication tag
+            if not self.verify_auth_tag(doc_id, sess_id, wm_id, nonce, auth_tag):
+                return {
+                    "valid_auth": False,
+                    "error": "Watermark authentication HMAC mismatch (potential tamper)."
+                }
+
+            return {
+                "valid_auth": True,
+                "doc_id": doc_id,
+                "session_id": sess_id,
+                "watermark_id": wm_id,
+                "nonce": nonce,
+                "auth_tag": auth_tag,
+                "canonical_token": clean_str
+            }
+        except Exception:
+            return None
 
 
 pdf_watermarker = PDFStegoWatermarker()

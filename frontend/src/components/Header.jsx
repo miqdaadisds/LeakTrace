@@ -1,17 +1,18 @@
 import React from 'react';
-import { Shield, Lock, Cpu, Search, Database, WifiOff, Play, CheckCircle2 } from 'lucide-react';
+import { Shield, Lock, Cpu, Search, Database, WifiOff, Play, Users } from 'lucide-react';
 
 export default function Header({ activeTab, setActiveTab, onRunQuickDemo, isRunningDemo }) {
   const navItems = [
-    { id: 'publish', label: '1. Distribute', icon: Lock },
-    { id: 'decrypt', label: '2. Decrypt & Mark', icon: Cpu },
-    { id: 'forensics', label: '3. Forensic Lab', icon: Search },
-    { id: 'ledger', label: '4. Ledger', icon: Database },
+    { id: 'identities', label: '1. Identities', icon: Users },
+    { id: 'publish', label: '2. Distribute', icon: Lock },
+    { id: 'decrypt', label: '3. Recipient Client', icon: Cpu },
+    { id: 'forensics', label: '4. Forensics Lab', icon: Search },
+    { id: 'ledger', label: '5. Provenance DLT', icon: Database },
   ];
 
   return (
     <header className="sticky top-0 z-50 apple-glass transition-all border-b border-white/60">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row items-center justify-between gap-3">
         {/* Brand Logo & Name */}
         <div className="flex items-center space-x-3 self-start sm:self-auto">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-sm shadow-blue-500/20">
@@ -25,13 +26,13 @@ export default function Header({ activeTab, setActiveTab, onRunQuickDemo, isRunn
               </span>
             </div>
             <p className="text-[11px] text-slate-500 font-medium">
-              SIH 2026 Problem Statement #237 &bull; Zero-Leak Provenance
+              Ministry of Defence / WESEE &bull; Zero-Leak Provenance
             </p>
           </div>
         </div>
 
         {/* Minimalist Apple Pill Tabs */}
-        <nav className="flex space-x-1 bg-slate-200/60 p-1 rounded-full backdrop-blur-md border border-white/40">
+        <nav className="flex flex-wrap space-x-1 bg-slate-200/60 p-1 rounded-full backdrop-blur-md border border-white/40">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -39,7 +40,7 @@ export default function Header({ activeTab, setActiveTab, onRunQuickDemo, isRunn
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${
                   isActive
                     ? 'bg-white text-slate-900 shadow-sm'
                     : 'text-slate-600 hover:text-slate-900'
@@ -52,11 +53,11 @@ export default function Header({ activeTab, setActiveTab, onRunQuickDemo, isRunn
           })}
         </nav>
 
-        {/* Live Demo & Air-Gapped Pill */}
-        <div className="flex items-center space-x-2.5">
+        {/* Air-Gapped Pill & Quick Demo */}
+        <div className="flex items-center space-x-2">
           <div className="hidden lg:flex items-center space-x-1 text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/70 font-semibold">
             <WifiOff className="w-3 h-3 text-emerald-600" />
-            <span>Air-Gapped</span>
+            <span>Air-Gapped Local</span>
           </div>
 
           <button
@@ -65,7 +66,7 @@ export default function Header({ activeTab, setActiveTab, onRunQuickDemo, isRunn
             className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-full shadow-sm hover:shadow transition-all flex items-center space-x-1.5 disabled:opacity-50"
           >
             <Play className={`w-3 h-3 fill-current ${isRunningDemo ? 'animate-spin' : ''}`} />
-            <span>{isRunningDemo ? 'Running...' : 'Run 90s Live Demo'}</span>
+            <span>{isRunningDemo ? 'Running...' : 'Run 30s Live Demo'}</span>
           </button>
         </div>
       </div>
