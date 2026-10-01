@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/logo.png" alt="LeakTrace Official Emblem" width="230" style="border-radius: 16px;">
+</p>
+
 # LeakTrace: Cryptographic Attribution & Immutable Decryption Provenance
 
 > **Smart India Hackathon (SIH) 2026 — Problem Statement No. 237 (ID: 26237)**  
