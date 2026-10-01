@@ -132,6 +132,13 @@ sequenceDiagram
 
 ## 3. Application Structure & Screenshots
 
+<p align="center">
+  <img src="docs/assets/demo_preview.gif" alt="LeakTrace Live UI Demonstration Preview" width="100%" style="border-radius: 12px; border: 1px solid #30363d;">
+</p>
+<p align="center">
+  <b>▶ Continuous Live UI Walkthrough Preview</b> &bull; <a href="docs/assets/leaktrace_ui_demo.mp4"><b>[Download Full 1080p MP4 Video]</b></a>
+</p>
+
 The desktop application provides 6 primary operational modules:
 
 | Module | Interface Preview | Description |
