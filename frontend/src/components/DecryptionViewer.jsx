@@ -59,7 +59,7 @@ export default function DecryptionViewer({ officers, documents, onDecrypted, onS
         private_key_x25519_b64: credentials.private_key_x25519_b64,
         private_key_pqc_b64: credentials.private_key_pqc_b64,
         private_key_sig_b64: credentials.private_key_sig_b64,
-        device_fingerprint: `NAVY-TERMINAL-${credentials.recipient_id.split('-')[2]}`,
+        device_fingerprint: `WORKSTATION-${credentials.recipient_id}`,
       });
       setDecryptedResult(res);
       if (onDecrypted) onDecrypted(res);
@@ -246,7 +246,7 @@ export default function DecryptionViewer({ officers, documents, onDecrypted, onS
               <Cpu className="w-8 h-8 text-slate-300 mx-auto" />
               <div className="text-slate-700 font-semibold">Workstation Awaiting Decryption</div>
               <p className="max-w-md mx-auto text-slate-500 text-[11px]">
-                Select an officer and click &ldquo;Authorize Decryption&rdquo; to decrypt, inject the invisible mark, and anchor the receipt.
+                Select a recipient (e.g. Bob) and click &ldquo;Authorize Decryption&rdquo; to decrypt, inject the invisible mark, and anchor the receipt.
               </p>
             </div>
           )}

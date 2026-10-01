@@ -220,7 +220,7 @@ ISSUING AUTHORITY: EXECUTIVE PROGRAM OFFICE
                   onClick={onGoToDecrypt}
                   className="w-full mt-3 py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-xs transition-all flex items-center justify-center space-x-1.5 shadow-sm"
                 >
-                  <span>Proceed to Step 2: Decrypt as Officer</span>
+                  <span>Proceed to Step 2: Decrypt as Recipient (Bob)</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
