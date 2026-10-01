@@ -2,9 +2,20 @@ import urllib.request
 import urllib.parse
 import json
 import io
+import socket
 import pytest
 
+def is_server_running(host="127.0.0.1", port=8000):
+    try:
+        with socket.create_connection((host, port), timeout=1):
+            return True
+    except OSError:
+        return False
+
 def test_live_server_end_to_end_flow():
+    if not is_server_running():
+        pytest.skip("Live server on 127.0.0.1:8000 is not running. Launch desktop app or run uvicorn to test live API.")
+
     # Ensure ledger is clean and restored
     try:
         req_reset = urllib.request.Request(
