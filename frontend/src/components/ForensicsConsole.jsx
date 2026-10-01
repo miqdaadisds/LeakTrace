@@ -16,28 +16,13 @@ import {
 } from 'lucide-react';
 import { analyzePdfLeak, analyzeTextLeak } from '../api';
 
-export default function ForensicsConsole({ preloadedPdfLeak, autoAnalyzeTrigger }) {
+export default function ForensicsConsole() {
   const [activeMode, setActiveMode] = useState('pdf'); // 'pdf' | 'text'
   const [selectedPdfFile, setSelectedPdfFile] = useState(null);
   const [leakedText, setLeakedText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [attributionResult, setAttributionResult] = useState(null);
   const [error, setError] = useState(null);
-
-  // If a decrypted PDF was passed from Step 2
-  useEffect(() => {
-    if (preloadedPdfLeak) {
-      setActiveMode('pdf');
-      setSelectedPdfFile(preloadedPdfLeak);
-      setAttributionResult(null);
-    }
-  }, [preloadedPdfLeak]);
-
-  useEffect(() => {
-    if (autoAnalyzeTrigger && selectedPdfFile) {
-      handlePdfAnalysis();
-    }
-  }, [autoAnalyzeTrigger, selectedPdfFile]);
 
   const handlePdfAnalysis = async () => {
     if (!selectedPdfFile) {
@@ -141,7 +126,7 @@ export default function ForensicsConsole({ preloadedPdfLeak, autoAnalyzeTrigger 
                       {selectedPdfFile ? selectedPdfFile.name : 'Drag & drop leaked PDF or click to browse'}
                     </div>
                     <p className="text-[11px] text-slate-400">
-                      Upload Decrypted-DOC-USER-BOB.pdf or any suspect document
+                      Upload any suspect leaked PDF document to extract the forensic watermark
                     </p>
                   </div>
                 </div>

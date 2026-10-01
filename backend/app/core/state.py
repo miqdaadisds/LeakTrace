@@ -65,9 +65,44 @@ class SystemState:
         self.document_metadata: Dict[str, Dict[str, Any]] = {}
         # (doc_id, recipient_id) -> .secure package bytes
         self.secure_packages: Dict[str, bytes] = {}
+        # Revocation registry for access control and certificate revocation
+        self.revoked_identities: Dict[str, Dict[str, Any]] = {}
+        self.revoked_documents: Dict[str, Dict[str, Any]] = {}
+        # Air-gapped offline provenance receipt queue
+        self.offline_receipt_store: Dict[str, DecryptionProvenanceReceipt] = {} # receipt_id -> receipt
         # Pre-seed identities and sample document
         self._initialize_seed_identities()
         self._initialize_seed_distribution()
+
+    def revoke_identity(self, recipient_id: str, reason: str = "Key compromise or clearance revoked") -> Dict[str, Any]:
+        info = {
+            "recipient_id": recipient_id,
+            "revoked_at": 1727712000.0,
+            "reason": reason
+        }
+        self.revoked_identities[recipient_id] = info
+        return info
+
+    def unrevoke_identity(self, recipient_id: str) -> bool:
+        if recipient_id in self.revoked_identities:
+            del self.revoked_identities[recipient_id]
+            return True
+        return False
+
+    def revoke_document(self, doc_id: str, reason: str = "Distribution retracted") -> Dict[str, Any]:
+        info = {
+            "doc_id": doc_id,
+            "revoked_at": 1727712000.0,
+            "reason": reason
+        }
+        self.revoked_documents[doc_id] = info
+        return info
+
+    def is_identity_revoked(self, recipient_id: str) -> bool:
+        return recipient_id in self.revoked_identities
+
+    def is_document_revoked(self, doc_id: str) -> bool:
+        return doc_id in self.revoked_documents
 
     def _initialize_seed_identities(self):
         """

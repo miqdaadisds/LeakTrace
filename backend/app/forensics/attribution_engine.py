@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from app.watermarking.pdf_stego import pdf_watermarker
 from app.watermarking.text_stego import TextSteganographyWatermarker
 from app.provenance.ledger import provenance_ledger
+from app.provenance.validator import validator_network
 from app.crypto.pqc_sig import DigitalSignatureManager
 from app.core.types import ForensicAttributionResult
 
@@ -30,11 +31,12 @@ class ForensicAttributionEngine:
             "public_key_sig_b64": public_key_sig_b64
         }
 
-    def investigate_pdf_leak(self, pdf_bytes: bytes) -> ForensicAttributionResult:
+    def investigate_pdf_leak(self, pdf_bytes: bytes, ledger: Optional[Any] = None) -> ForensicAttributionResult:
         """
         Primary investigation workflow for suspect digital PDF leaks.
         No password or private keys required.
         """
+        active_ledger = ledger or provenance_ledger
         extracted = pdf_watermarker.extract_from_pdf_bytes(pdf_bytes)
         if not extracted:
             return ForensicAttributionResult(
@@ -59,7 +61,7 @@ class ForensicAttributionEngine:
         session_id = extracted["session_id"]
 
         # Search provenance blockchain ledger
-        record = provenance_ledger.lookup_by_watermark_id(watermark_id)
+        record = active_ledger.lookup_by_watermark_id(watermark_id)
         if not record:
             return ForensicAttributionResult(
                 is_attributed=False,
@@ -80,11 +82,15 @@ class ForensicAttributionEngine:
         sig_valid = DigitalSignatureManager.verify(receipt.event_digest.encode("utf-8"), sig_bytes, pub_sig_bytes)
 
         # 2. Verify Merkle Tree Inclusion Proof in Block
-        merkle_proof = provenance_ledger.get_merkle_proof_for_receipt(watermark_id)
+        merkle_proof = active_ledger.get_merkle_proof_for_receipt(watermark_id)
         merkle_valid = merkle_proof.get("proof_valid", False) if merkle_proof else False
 
-        # 3. Verify Entire Blockchain Ledger Integrity
-        ledger_valid, ledger_msg, _ = provenance_ledger.verify_chain_integrity()
+        # 3. Verify Entire Blockchain Ledger Integrity & Validator Quorum
+        ledger_valid, ledger_msg, _ = active_ledger.verify_chain_integrity()
+        target_block = active_ledger.get_chain()[block_idx]
+        is_quorum, val_count, quorum_desc = validator_network.verify_block_quorum(
+            target_block.block_index, target_block.previous_hash, target_block.merkle_root, target_block.timestamp, target_block.validator_signatures
+        )
 
         # 4. Resolve identity metadata
         user_meta = self._identity_directory.get(receipt.recipient_id, {})
@@ -93,7 +99,7 @@ class ForensicAttributionEngine:
 
         decryption_time_str = datetime.fromtimestamp(receipt.timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-        is_attributed = sig_valid and merkle_valid and ledger_valid
+        is_attributed = sig_valid and merkle_valid and ledger_valid and is_quorum
 
         detailed_evidence = {
             "receipt_id": receipt.receipt_id,
@@ -105,15 +111,16 @@ class ForensicAttributionEngine:
             "ledger_block_index": block_idx,
             "merkle_root": merkle_proof.get("merkle_root", "") if merkle_proof else "",
             "signature_algorithm": DigitalSignatureManager.ALGORITHM,
+            "validator_quorum": quorum_desc,
             "proof_path_depth": len(merkle_proof.get("proof_path", [])) if merkle_proof else 0
         }
 
         summary = (
             f"ATTRIBUTION VERIFIED: Document leaked by {recipient_name} ({receipt.recipient_id}). "
             f"Forensic watermark {watermark_id} matches Decryption Receipt {receipt.receipt_id} on Block #{block_idx}. "
-            f"Recipient ML-DSA-65 signature is VALID and ledger integrity is 100% VERIFIED."
+            f"Recipient ML-DSA-65 signature is VALID, ledger integrity is 100% VERIFIED, and 4-node notary quorum achieved."
             if is_attributed else
-            f"ATTRIBUTION CONFLICT: Cryptographic signature or ledger proof failed validation."
+            f"ATTRIBUTION CONFLICT: Cryptographic signature, quorum, or ledger proof failed validation."
         )
 
         return ForensicAttributionResult(
@@ -129,10 +136,10 @@ class ForensicAttributionEngine:
             evidence_type="PDF_STRUCTURAL_CARRIER",
             watermark_status="MATCHED",
             signature_status="VALID" if sig_valid else "INVALID",
-            ledger_status="VALID" if (merkle_valid and ledger_valid) else "INVALID",
+            ledger_status="VALID" if (merkle_valid and ledger_valid and is_quorum) else "INVALID",
             ledger_block_index=block_idx,
             merkle_root=merkle_proof.get("merkle_root", "") if merkle_proof else "",
-            validator_quorum_status="QUORUM_VERIFIED (3/3 nodes)",
+            validator_quorum_status=quorum_desc,
             forensic_summary=summary,
             detailed_evidence=detailed_evidence
         )

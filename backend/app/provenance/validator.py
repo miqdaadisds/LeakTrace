@@ -74,16 +74,17 @@ class ValidatorNode:
 
 class MultiValidatorNetwork:
     """
-    Simulates the 3-node permissioned notary network running in the air-gapped defence enclave.
-    Quorum requirement: 2 of 3 (or 3 of 3) validators must independently sign.
+    Permissioned notary network running in the air-gapped environment.
+    Quorum requirement: 3 of 4 validators must independently sign.
     """
     def __init__(self):
         self.nodes: Dict[str, ValidatorNode] = {
-            "VAL-NODE-ALPHA": ValidatorNode("VAL-NODE-ALPHA", "WESEE Naval Command Notary A", "New Delhi Enclave"),
-            "VAL-NODE-BRAVO": ValidatorNode("VAL-NODE-BRAVO", "Western Naval Command Notary B", "Mumbai Enclave"),
-            "VAL-NODE-CHARLIE": ValidatorNode("VAL-NODE-CHARLIE", "Eastern Naval Command Notary C", "Visakhapatnam Enclave"),
+            "NODE-01": ValidatorNode("NODE-01", "Validator Node 01", "Air-Gapped Notary Zone 1"),
+            "NODE-02": ValidatorNode("NODE-02", "Validator Node 02", "Air-Gapped Notary Zone 2"),
+            "NODE-03": ValidatorNode("NODE-03", "Validator Node 03", "Air-Gapped Notary Zone 3"),
+            "NODE-04": ValidatorNode("NODE-04", "Validator Node 04", "Air-Gapped Notary Zone 4"),
         }
-        self.quorum_threshold = 2  # 2-of-3 quorum required for block finality
+        self.quorum_threshold = 3  # 3-of-4 quorum required for block finality
 
     def get_validators_info(self) -> List[Dict[str, str]]:
         return [

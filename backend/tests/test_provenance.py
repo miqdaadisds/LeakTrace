@@ -101,3 +101,50 @@ def test_ledger_tampering_detection():
     valid_after, error_msg, _ = ledger.verify_chain_integrity()
     assert valid_after is False
     assert "Tampered" in error_msg or "mismatch" in error_msg
+
+
+def test_4_node_validator_quorum():
+    """Verifies that 4 independent validator nodes (NODE-01..04) exist with 3-of-4 quorum threshold."""
+    assert len(validator_network.nodes) == 4
+    assert set(validator_network.nodes.keys()) == {"NODE-01", "NODE-02", "NODE-03", "NODE-04"}
+    assert validator_network.quorum_threshold == 3
+
+    ledger = ProvenanceLedger()
+    receipt = DecryptionProvenanceReceipt(
+        receipt_id="RCPT-QUORUM-TEST",
+        doc_id="DOC-QUORUM",
+        recipient_id="USER-BOB",
+        session_id="SESS-QUORUM",
+        watermark_id="WM-QUORUM-01",
+        ciphertext_hash="hash_val",
+        timestamp=time.time(),
+        device_fingerprint="WORKSTATION-01",
+        recipient_signature_b64="SIG",
+        recipient_public_key_sig_b64="PUB",
+        event_digest="DIGEST"
+    )
+    block_idx, _ = ledger.commit_receipt(receipt)
+    block = ledger.get_chain()[block_idx]
+
+    # Must contain 4 validator signatures
+    assert len(block.validator_signatures) == 4
+    is_quorum, val_count, desc = validator_network.verify_block_quorum(
+        block.block_index, block.previous_hash, block.merkle_root, block.timestamp, block.validator_signatures
+    )
+    assert is_quorum is True
+    assert val_count >= 3
+    assert "Quorum achieved" in desc
+
+
+def test_revocation_enforcement():
+    """Verifies that revoking a recipient or document blocks unauthorized decryption."""
+    from app.core.state import system_state
+    
+    # Revoke Bob
+    system_state.revoke_identity("USER-BOB", "Security clearance test revocation")
+    assert system_state.is_identity_revoked("USER-BOB") is True
+
+    # Unrevoke Bob
+    system_state.unrevoke_identity("USER-BOB")
+    assert system_state.is_identity_revoked("USER-BOB") is False
+

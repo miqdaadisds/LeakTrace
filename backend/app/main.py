@@ -13,6 +13,7 @@ from app.api.routes_distribution import router as distribution_router
 from app.api.routes_recipient import router as recipient_router
 from app.api.routes_forensics import router as forensics_router
 from app.api.routes_ledger import router as ledger_router
+from app.api.routes_security import router as security_router
 from app.core.state import system_state
 from app.provenance.ledger import provenance_ledger
 
@@ -45,6 +46,7 @@ app.include_router(distribution_router)
 app.include_router(recipient_router)
 app.include_router(forensics_router)
 app.include_router(ledger_router)
+app.include_router(security_router)
 
 
 @app.get("/")
@@ -61,7 +63,7 @@ def root():
             "symmetric_cipher": "AES-256-GCM (O(1) single ciphertext)",
             "credential_vault_kdf": "Argon2id (Memory-Hard Password Protection)"
         },
-        "provenance_dlt": "Multi-Validator Notary Consensus (3 Independent Offline Nodes)",
+        "provenance_dlt": "Multi-Validator Notary Consensus (4 Independent Offline Nodes NODE-01..04)",
         "watermarking": "Dynamic Recipient-Session Structural PDF & Zero-Width Content Injection",
         "docs_url": "/docs"
     }
@@ -81,5 +83,5 @@ def system_status():
         "packages_active": len(system_state.secure_packages),
         "blockchain_blocks_count": len(provenance_ledger.get_chain()),
         "ledger_verified": is_valid,
-        "notary_quorum_status": "2-of-3 Quorum Active"
+        "notary_quorum_status": "3-of-4 Quorum Active (NODE-01..04)"
     }

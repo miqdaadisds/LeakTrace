@@ -1,13 +1,23 @@
 import React from 'react';
-import { Shield, Lock, Cpu, Search, Database, WifiOff, Play, Users } from 'lucide-react';
+import { 
+  Shield, 
+  Send, 
+  FolderLock, 
+  Users, 
+  Search, 
+  Database, 
+  ShieldAlert, 
+  WifiOff 
+} from 'lucide-react';
 
-export default function Header({ activeTab, setActiveTab, onRunQuickDemo, isRunningDemo }) {
+export default function Header({ activeTab, setActiveTab }) {
   const navItems = [
-    { id: 'identities', label: '1. Identities', icon: Users },
-    { id: 'publish', label: '2. Distribute', icon: Lock },
-    { id: 'decrypt', label: '3. Recipient Client', icon: Cpu },
-    { id: 'forensics', label: '4. Forensics Lab', icon: Search },
-    { id: 'ledger', label: '5. Provenance DLT', icon: Database },
+    { id: 'distribute', label: '1. DISTRIBUTE', icon: Send },
+    { id: 'my-documents', label: '2. MY DOCUMENTS', icon: FolderLock },
+    { id: 'identities', label: '3. PEOPLE / IDENTITIES', icon: Users },
+    { id: 'forensics', label: '4. FORENSICS', icon: Search },
+    { id: 'provenance', label: '5. PROVENANCE', icon: Database },
+    { id: 'security', label: '6. SECURITY', icon: ShieldAlert },
   ];
 
   return (
@@ -53,21 +63,12 @@ export default function Header({ activeTab, setActiveTab, onRunQuickDemo, isRunn
           })}
         </nav>
 
-        {/* Air-Gapped Pill & Quick Demo */}
+        {/* Air-Gapped Status Pill */}
         <div className="flex items-center space-x-2">
-          <div className="hidden lg:flex items-center space-x-1 text-[11px] text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/70 font-semibold">
-            <WifiOff className="w-3 h-3 text-emerald-600" />
-            <span>Air-Gapped Local</span>
+          <div className="flex items-center space-x-1.5 text-[11px] text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 font-semibold shadow-sm">
+            <WifiOff className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Air-Gapped Offline Enclave</span>
           </div>
-
-          <button
-            onClick={onRunQuickDemo}
-            disabled={isRunningDemo}
-            className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-full shadow-sm hover:shadow transition-all flex items-center space-x-1.5 disabled:opacity-50"
-          >
-            <Play className={`w-3 h-3 fill-current ${isRunningDemo ? 'animate-spin' : ''}`} />
-            <span>{isRunningDemo ? 'Running...' : 'Run 30s Live Demo'}</span>
-          </button>
         </div>
       </div>
     </header>
