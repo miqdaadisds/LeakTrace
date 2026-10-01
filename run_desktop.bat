@@ -1,7 +1,7 @@
 @echo off
-title NISHAN-PQ: Cryptographic Attribution & Provenance Enclave (SIH26237)
+title LeakTrace - Cryptographic Attribution and Provenance System (SIH26237)
 echo ===============================================================================
-echo  NISHAN-PQ: Cryptographic Attribution & Provenance System (SIH26237)
+echo  LeakTrace: Cryptographic Attribution and Provenance System (SIH26237)
 echo  Ministry of Defence / WESEE
 echo ===============================================================================
 echo.
@@ -13,5 +13,5 @@ if not exist "dist\index.html" (
     call npm.cmd run build
 )
 
-echo Starting desktop application with silent background cryptographic worker...
-call npx.cmd electron electron/main.cjs
+echo Starting LeakTrace desktop application...
+call npx.cmd electron electron\main.cjs

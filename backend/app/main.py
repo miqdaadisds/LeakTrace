@@ -1,12 +1,14 @@
 """
-Cryptographic Attribution & Immutable Decryption Provenance for Multi-Recipient Encrypted Document Distribution
+LeakTrace: Cryptographic Attribution & Immutable Decryption Provenance for Multi-Recipient Encrypted Document Distribution
 Smart India Hackathon (SIH) 2026 - Problem Statement No. 237 (ID: 26237).
 Organization: Ministry of Defence (WESEE).
 
 Main FastAPI Application Entrypoint.
 """
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes_identity import router as identity_router
 from app.api.routes_distribution import router as distribution_router
@@ -18,7 +20,7 @@ from app.core.state import system_state
 from app.provenance.ledger import provenance_ledger
 
 app = FastAPI(
-    title="NISHAN-PQ: Cryptographic Attribution & Provenance System",
+    title="LeakTrace: Cryptographic Attribution & Provenance System",
     description=(
         "Production-grade implementation for SIH 2026 Problem Statement #26237 "
         "(Ministry of Defence - WESEE). Features NIST FIPS 203 ML-KEM-768 hybrid envelope "
@@ -40,7 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register modular routes
+# Register modular API routes
 app.include_router(identity_router)
 app.include_router(distribution_router)
 app.include_router(recipient_router)
@@ -49,10 +51,10 @@ app.include_router(ledger_router)
 app.include_router(security_router)
 
 
-@app.get("/")
-def root():
+@app.get("/api/system/info")
+def system_info():
     return {
-        "system": "NISHAN-PQ Cryptographic Attribution & Provenance Enclave",
+        "system": "LeakTrace Cryptographic Attribution & Provenance Enclave",
         "sih_problem_statement": "SIH 2026 PS No. 237 (ID: 26237)",
         "organization": "Ministry of Defence / WESEE",
         "theme": "Blockchain & Post-Quantum Cybersecurity",
@@ -73,6 +75,7 @@ def root():
 def system_status():
     is_valid, msg, _ = provenance_ledger.verify_chain_integrity()
     return {
+        "system": "LeakTrace",
         "status": "ONLINE",
         "pqc_kem_algorithm": "NIST FIPS 203 ML-KEM-768",
         "pqc_sig_algorithm": "NIST FIPS 204 ML-DSA-65",
@@ -85,3 +88,9 @@ def system_status():
         "ledger_verified": is_valid,
         "notary_quorum_status": "3-of-4 Quorum Active (NODE-01..04)"
     }
+
+
+# Mount built frontend production assets for seamless single-port hosting
+frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if frontend_dist.exists() and (frontend_dist / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")

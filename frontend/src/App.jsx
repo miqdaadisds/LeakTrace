@@ -112,7 +112,7 @@ export default function App() {
       </main>
 
       <footer className="border-t border-slate-200/60 bg-white/40 py-3 text-center text-[11px] text-slate-500">
-        NISHAN-PQ &bull; SIH 2026 Problem Statement #237 &bull; Weapons and Electronics Systems Engineering Establishment (WESEE)
+        LeakTrace &bull; SIH 2026 Problem Statement #237 &bull; Weapons and Electronics Systems Engineering Establishment (WESEE)
       </footer>
     </div>
   );

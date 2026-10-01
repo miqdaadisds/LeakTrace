@@ -30,7 +30,7 @@ export default function Header({ activeTab, setActiveTab }) {
           </div>
           <div>
             <div className="flex items-center space-x-2">
-              <span className="text-base font-bold text-slate-900 tracking-tight">NISHAN-PQ</span>
+              <span className="text-base font-bold text-slate-900 tracking-tight">LeakTrace</span>
               <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 text-slate-600 border border-slate-200/80">
                 SIH26237
               </span>

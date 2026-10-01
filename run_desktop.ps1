@@ -1,6 +1,6 @@
-# NISHAN-PQ: Standalone Desktop Launcher (SIH26237)
+# LeakTrace: Standalone Desktop Launcher (SIH26237)
 Write-Host "===============================================================================" -ForegroundColor Cyan
-Write-Host " NISHAN-PQ: Cryptographic Attribution & Provenance System (SIH26237)" -ForegroundColor Cyan
+Write-Host " LeakTrace: Cryptographic Attribution and Provenance System (SIH26237)" -ForegroundColor Cyan
 Write-Host " Ministry of Defence / WESEE" -ForegroundColor Cyan
 Write-Host "===============================================================================" -ForegroundColor Cyan
 Write-Host ""
@@ -14,5 +14,5 @@ if (-not (Test-Path "dist\index.html")) {
     & cmd.exe /c "npm.cmd run build"
 }
 
-Write-Host "Launching desktop application (Electron + Silent Python Worker)..." -ForegroundColor Green
-& cmd.exe /c "npx.cmd electron electron/main.cjs"
+Write-Host "Launching LeakTrace desktop application..." -ForegroundColor Green
+& cmd.exe /c "npx.cmd electron electron\main.cjs"
