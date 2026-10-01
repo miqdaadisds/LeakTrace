@@ -2,6 +2,11 @@
   <img src="docs/assets/logo.png" alt="LeakTrace Official Emblem" width="230" style="border-radius: 16px;">
 </p>
 
+<p align="center">
+  <b>From Encryption to Evidence [E &rarr; E]</b><br>
+  <i>Military-Grade Cryptographic Attribution & Immutable Decryption Provenance</i>
+</p>
+
 # LeakTrace: Cryptographic Attribution & Immutable Decryption Provenance
 
 > **Smart India Hackathon (SIH) 2026 — Problem Statement No. 237 (ID: 26237)**  
