@@ -130,16 +130,18 @@ sequenceDiagram
 
 ---
 
-## 3. Application Structure
+## 3. Application Structure & Screenshots
 
-The desktop application provides 6 primary modules:
+The desktop application provides 6 primary operational modules:
 
-1. **DISTRIBUTE:** Select a PDF, configure classification, select authorized recipients, and generate portable `.secure` packages.
-2. **MY DOCUMENTS:** Recipient workstation enclave. Open `.secure` packages, enter passphrase, decrypt locally, embed dynamic watermark, generate ML-DSA receipt, and download watermarked PDF.
-3. **PEOPLE / IDENTITIES:** Recipient registry managing post-quantum cryptographic profiles and Argon2id credential vaults.
-4. **FORENSICS:** Ingest leaked PDF documents or text excerpts, recover watermark IDs, verify signatures and Merkle proofs, and output deterministic attribution reports.
-5. **PROVENANCE:** Multi-validator permissioned DLT explorer displaying chained blocks, Merkle tree roots, and 3-of-4 quorum signatures.
-6. **SECURITY:** Validator network monitoring, certificate revocation lists (CRL), document access retraction, and live historical tamper detection audits.
+| Module | Interface Preview | Description |
+| :--- | :--- | :--- |
+| **01. DISTRIBUTE** | <img src="docs/screenshots/slide_01.png" width="400" alt="Distribute Console"> | Encrypt document once ($O(1)$) and wrap CEKs for authorized naval personnel. |
+| **02. MY DOCUMENTS** | <img src="docs/screenshots/slide_03.png" width="400" alt="Recipient Enclave"> | Officer Bob unlocks Argon2id vault locally; triple-layer watermark injected. |
+| **03. FORENSICS LAB** | <img src="docs/screenshots/slide_04.png" width="400" alt="Forensic Attribution"> | Blind leak attribution: Ingest leaked PDF without passwords to prove leaker identity. |
+| **04. PROVENANCE** | <img src="docs/screenshots/slide_05.png" width="400" alt="Blockchain Explorer"> | 4-Node permissioned quorum ledger, Merkle roots, and validator endorsements. |
+| **05. SECURITY AUDIT** | <img src="docs/screenshots/slide_06.png" width="400" alt="Security Console"> | Real-time Byzantine validator monitoring and historical tamper detection audit. |
+| **06. IDENTITIES** | <img src="docs/screenshots/slide_07.png" width="400" alt="PQC Profiles"> | Post-quantum key registry (FIPS 203 ML-KEM-768 & FIPS 204 ML-DSA-65). |
 
 ---
 
