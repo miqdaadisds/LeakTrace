@@ -62,7 +62,7 @@ export default function IdentityManager({ identities, onIdentityCreated }) {
             <span>Enrolled Recipient Identities</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Registered post-quantum cryptographic profiles. Private keys are encrypted at rest with Argon2id and never stored on the server.
+            Registered post-quantum cryptographic profiles. Private keys are encrypted at rest with Argon2id in a password-authenticated credential vault and isolated inside the client enclave.
           </p>
         </div>
         <button

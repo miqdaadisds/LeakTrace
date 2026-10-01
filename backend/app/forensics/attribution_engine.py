@@ -118,7 +118,7 @@ class ForensicAttributionEngine:
         summary = (
             f"ATTRIBUTION VERIFIED: Document leaked by {recipient_name} ({receipt.recipient_id}). "
             f"Forensic watermark {watermark_id} matches Decryption Receipt {receipt.receipt_id} on Block #{block_idx}. "
-            f"Recipient ML-DSA-65 signature is VALID, ledger integrity is 100% VERIFIED, and 4-node notary quorum achieved."
+            f"Recipient ML-DSA-65 signature is VALID, ledger integrity is VALID, and 3-of-4 validator quorum achieved."
             if is_attributed else
             f"ATTRIBUTION CONFLICT: Cryptographic signature, quorum, or ledger proof failed validation."
         )

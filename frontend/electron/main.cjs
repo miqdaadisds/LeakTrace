@@ -1,7 +1,7 @@
 const { app, BrowserWindow, dialog } = require('electron');
 const path = require('path');
 const os = require('os');
-const { spawn, execSync } = require('child_process');
+const { spawn } = require('child_process');
 const http = require('http');
 
 // Set isolated UserData path to avoid Windows disk cache lock conflicts
@@ -82,11 +82,7 @@ function killPythonBackend() {
   if (spawnedByUs && pythonProcess && pythonProcess.pid) {
     console.log(`[LeakTrace] Terminating Python backend PID: ${pythonProcess.pid}`);
     try {
-      if (process.platform === 'win32') {
-        execSync(`taskkill /pid ${pythonProcess.pid} /f /t`);
-      } else {
-        pythonProcess.kill('SIGKILL');
-      }
+      pythonProcess.kill();
     } catch (_) {}
     pythonProcess = null;
   }
@@ -104,8 +100,41 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       nodeIntegration: false,
       contextIsolation: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
     autoHideMenuBar: true,
+  });
+
+  // Strict Content Security Policy header enforcement
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self' http://127.0.0.1:8000; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http://127.0.0.1:8000; connect-src 'self' http://127.0.0.1:8000; font-src 'self' data:; object-src 'none'; base-uri 'self';"
+        ],
+      },
+    });
+  });
+
+  // Block external window / popup creation
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    console.warn(`[LeakTrace Security] Denied window open request: ${url}`);
+    return { action: 'deny' };
+  });
+
+  // Block external navigation away from localhost backend enclave
+  mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+    try {
+      const parsedUrl = new URL(navigationUrl);
+      if (parsedUrl.origin !== `http://127.0.0.1:${BACKEND_PORT}` && parsedUrl.protocol !== 'file:') {
+        console.warn(`[LeakTrace Security] Blocked external navigation: ${navigationUrl}`);
+        event.preventDefault();
+      }
+    } catch (_) {
+      event.preventDefault();
+    }
   });
 
   // Load the web application from the local backend service

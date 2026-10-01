@@ -30,10 +30,10 @@ export default function BlockchainExplorer({ blocks, onRefreshBlocks }) {
   };
 
   const validatorNodes = [
-    { id: 'NODE-01', name: 'Validator Node 01', loc: 'Air-Gapped Notary Zone 1' },
-    { id: 'NODE-02', name: 'Validator Node 02', loc: 'Air-Gapped Notary Zone 2' },
-    { id: 'NODE-03', name: 'Validator Node 03', loc: 'Air-Gapped Notary Zone 3' },
-    { id: 'NODE-04', name: 'Validator Node 04', loc: 'Air-Gapped Notary Zone 4' },
+    { id: 'NODE-01', name: 'Validator NODE-01', loc: 'Permissioned Notary Identity 1' },
+    { id: 'NODE-02', name: 'Validator NODE-02', loc: 'Permissioned Notary Identity 2' },
+    { id: 'NODE-03', name: 'Validator NODE-03', loc: 'Permissioned Notary Identity 3' },
+    { id: 'NODE-04', name: 'Validator NODE-04', loc: 'Permissioned Notary Identity 4' },
   ];
 
   return (
@@ -46,7 +46,7 @@ export default function BlockchainExplorer({ blocks, onRefreshBlocks }) {
             <span>Immutable Provenance Ledger & Multi-Validator DLT</span>
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Permissioned offline DLT with SHA-256 block chaining, RFC 6962 Merkle tree roots, and 4 independent notary validator nodes (3-of-4 quorum).
+            Permissioned offline DLT with SHA-256 block chaining, RFC 6962 Merkle tree roots, and 4 logical permissioned validators (NODE-01 to NODE-04, 3-of-4 quorum).
           </p>
         </div>
 

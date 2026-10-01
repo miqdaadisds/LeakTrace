@@ -228,7 +228,7 @@ export default function MyDocuments({ identities, activeDocs, onDecrypted }) {
                 required
               />
               <span className="text-[10px] text-slate-400 mt-1 block">
-                Derived locally. Passwords and decrypted keys NEVER touch the server or network.
+                Unlocked locally inside the recipient machine enclave (127.0.0.1). No password, private key, or plaintext ever leaves this machine or reaches any external network.
               </span>
             </div>
 
@@ -357,7 +357,7 @@ export default function MyDocuments({ identities, activeDocs, onDecrypted }) {
                   <p className="text-slate-600 text-[11px] mb-2">Security Classification: CONFIDENTIAL // RESTRICTED</p>
                   <p>1. OPERATIONAL MANDATE: Full air-gapped cryptographic document distribution.</p>
                   <p>2. POST-QUANTUM ASSURANCE: NIST FIPS 203 ML-KEM-768 key encapsulation.</p>
-                  <p>3. NON-REPUDIATION: NIST FIPS 204 ML-DSA-65 hardware-level digital signing.</p>
+                  <p>3. NON-REPUDIATION: NIST FIPS 204 ML-DSA-65 post-quantum digital signing.</p>
                   <p>4. FORENSIC ATTRIBUTION: Dynamic zero-width and structural watermarking.</p>
                   <p className="text-[10px] text-slate-500 mt-2 italic">
                     Invisible recipient and session tokens embedded across document structure. Leaked copies are cryptographically attributable.

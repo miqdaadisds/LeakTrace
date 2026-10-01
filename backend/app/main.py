@@ -65,7 +65,7 @@ def system_info():
             "symmetric_cipher": "AES-256-GCM (O(1) single ciphertext)",
             "credential_vault_kdf": "Argon2id (Memory-Hard Password Protection)"
         },
-        "provenance_dlt": "Multi-Validator Notary Consensus (4 Independent Offline Nodes NODE-01..04)",
+        "provenance_dlt": "Permissioned Multi-Validator Notary Consensus (4 Logical Validators NODE-01..04, 3-of-4 Quorum)",
         "watermarking": "Dynamic Recipient-Session Structural PDF & Zero-Width Content Injection",
         "docs_url": "/docs"
     }
@@ -86,7 +86,7 @@ def system_status():
         "packages_active": len(system_state.secure_packages),
         "blockchain_blocks_count": len(provenance_ledger.get_chain()),
         "ledger_verified": is_valid,
-        "notary_quorum_status": "3-of-4 Quorum Active (NODE-01..04)"
+        "notary_quorum_status": "3-of-4 Quorum Active (4 Logical Validators NODE-01..04)"
     }
 
 

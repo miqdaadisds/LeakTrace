@@ -160,7 +160,7 @@ export default function SecurityConsole({ identities, activeDocs, onSecurityUpda
               <span>Permissioned Notary Validator Nodes (4-Node Quorum)</span>
             </h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Strict consensus requirement: 3 of 4 independent validator nodes must independently sign block headers.
+              Strict consensus requirement: 3 of 4 logical permissioned validator identities must independently sign block headers.
             </p>
           </div>
           <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
@@ -237,7 +237,7 @@ export default function SecurityConsole({ identities, activeDocs, onSecurityUpda
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Ledger Integrity 100% Verified</span>
+                  <span>Ledger Integrity Verified</span>
                 </>
               )}
             </div>

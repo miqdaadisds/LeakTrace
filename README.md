@@ -1,204 +1,122 @@
-# Indian Navy WESEE — Cryptographic Attribution & Immutable Decryption Provenance
+# LeakTrace: Cryptographic Attribution & Immutable Decryption Provenance
 
 > **Smart India Hackathon (SIH) 2026 — Problem Statement No. 237 (ID: 26237)**  
-> **Organization:** Ministry of Defence — Weapons and Electronics Systems Engineering Establishment (WESEE), Indian Navy  
+> **Organization:** Ministry of Defence — Weapons and Electronics Systems Engineering Establishment (WESEE)  
 > **Category:** Software  
-> **Theme:** Blockchain & Cybersecurity  
+> **Theme:** Blockchain & Post-Quantum Cybersecurity  
+> **Deployment Model:** Standalone Air-Gapped Desktop Application (Electron + FastAPI Enclave)
 
 ---
 
 ## 1. Executive Summary & Problem Statement Overview
 
-In modern naval warfare and defence intelligence operations, classified operational orders, patrol coordinates, and tactical directives are distributed to multiple field commanders, ships, and flotillas simultaneously.
+In defence document distribution, sensitive operational directives are delivered using a broadcast-encrypt / individually-decrypt model: one document is encrypted once and distributed to multiple authorized recipients.
 
-### The Real-World Defence Problem
-1. **The Traitor / Leaker Attribution Dilemma:** When an operational leak occurs (e.g. an unauthorized officer copy-pastes a directive onto an unclassified forum or snaps a photo/screenshot), conventional symmetric or public-key encryption fails: once decrypted, all authorized recipients hold identical copies. Traditional systems cannot prove *which* officer originated the leak.
-2. **The $N \times$ Storage Explosion of Naive Watermarking:** If headquarters pre-watermarks documents before distribution, a 50 MB classified tactical PDF sent to 100 commanders requires generating and distributing $100 \times 50\text{ MB} = 5\text{ GB}$ of data, saturating restricted satellite links (UHF/VHF/Band-3 naval communications).
-3. **Plausible Deniability & Repudiation:** A rogue officer can claim: *"My terminal never decrypted this directive; someone else spoofed my identity."* Without cryptographic non-repudiation, courts-martial cannot convict leakers.
-4. **Post-Quantum Vulnerability:** Classical public-key schemes (RSA, standard ECC) are vulnerable to future quantum cryptanalysis under "Harvest Now, Decrypt Later" adversaries.
+### The Problem
+When each recipient decrypts the same document, the resulting plaintext copies are visually identical. If one copy is leaked, every recipient who could decrypt it becomes an equally plausible suspect.
 
-### What SIH PS #26237 Expects Us to Make
-This system is an **end-to-end, production-grade defence platform** satisfying every mandate of PS #26237:
-1. **Multi-Recipient Hybrid Post-Quantum Cryptographic Envelope ($O(1)$ Payload):** Document payload is encrypted **once** with AES-256-GCM. The 256-bit Content Encryption Key (CEK) is independently wrapped for $N$ authorized recipients using **NIST FIPS 203 ML-KEM-768 + Classical X25519 hybrid key encapsulation**.
-2. **Decryption-Time Deterministic Attribution:** Watermarking is performed **at client decryption time**, eliminating redundant multi-file storage while binding the recipient's identity, timestamp, and session nonce invisibly into the plaintext and visual layers.
-3. **Dual-Domain Steganographic Watermarking:**
-   - **Text-Domain:** Non-printable Unicode zero-width sequences (`\u200B`, `\u200C`, `\u200D`, `\uFEFF`) that survive copy-pasting, word wrapping, and text extractions.
-   - **Visual/Image-Domain:** 2D Block Discrete Cosine Transform (DCT) with Multi-Coefficient Quantization Index Modulation (QIM) in the mid-frequency AC band, surviving screenshots, scans, and lossy compression.
-4. **Immutable Decryption Provenance Ledger:** A tamper-evident append-only blockchain ledger. Upon client decryption, a digitally signed (Ed25519 / ML-DSA) **Decryption Provenance Receipt** is anchored into a **SHA-256 Merkle tree**, producing non-repudiation proof.
-5. **Automated Forensic Leak Attribution Console:** Cyber defence investigators upload a leaked text snippet or screenshot; the engine extracts the watermark, validates the master HMAC, verifies the Merkle proof against the blockchain, and identifies the officer with **mathematical certainty ($\ge 99\%$)**.
+### The LeakTrace Solution
+LeakTrace implements the official SIH26237 workflow end-to-end:
+1. **Encrypt Once ($O(1)$ Payload):** Document is encrypted once with AES-256-GCM. The Content Encryption Key (CEK) is wrapped individually for each recipient using NIST FIPS 203 ML-KEM-768.
+2. **One Portable Package per Recipient (`.secure` Container):** Contains metadata, ciphertext, wrapped CEK, Argon2id encrypted credential vault, and public verification records.
+3. **Local Recipient Decryption:** The recipient opens the `.secure` file on any computer using their personal password. The Argon2id vault unlocks locally, ML-KEM decapsulation unwraps the CEK, and AES-256-GCM decrypts the document inside the local recipient machine enclave.
+4. **Unique Invisible Forensic Watermark:** Injected at decryption time, embedding a fresh session nonce and watermark token. Copies look visually identical but are forensically distinct.
+5. **NIST FIPS 204 ML-DSA-65 Digital Signing:** The recipient's local ML-DSA-65 private key automatically signs a canonical provenance event digest.
+6. **Immutable Permissioned DLT:** The signed provenance receipt is committed to an offline permissioned ledger governed by 4 logical validator identities (`NODE-01` through `NODE-04`) with a strict 3-of-4 quorum threshold.
+7. **Forensic Attribution Lab:** Investigators ingest the actual leaked PDF (without passwords or private keys), extract the forensic watermark, verify the ML-DSA signature and Merkle inclusion proof against the DLT, and attribute the leak with deterministic non-repudiation.
 
 ---
 
-## 2. Architecture & Loosely Decoupled Design
+## 2. Cryptographic Architecture & Trust Boundary
 
-The codebase enforces strict **Single Ownership (Separation of Concerns)** across all layers:
+### Cryptographic Standards
+- **Payload Cipher:** AES-256-GCM (Authenticated Encryption with Associated Data)
+- **Post-Quantum Key Establishment:** NIST FIPS 203 ML-KEM-768
+- **Post-Quantum Digital Signatures:** NIST FIPS 204 ML-DSA-65
+- **Credential Protection:** Argon2id password-authenticated memory-hard KDF + AES-256-GCM vault
+- **Hash Functions:** SHA-256 / SHA-3
+- **Forensic Channels:** Dual-layer steganography (PDF structural dictionary `/ForensicProof` + zero-width Unicode carrier)
 
-```
-brave-einstein/
-├── backend/
-│   ├── app/
-│   │   ├── api/                  # FastAPI REST endpoints
-│   │   │   ├── routes_documents.py   # Multi-recipient envelope distribution
-│   │   │   ├── routes_decryption.py  # Client decapsulation & provenance minting
-│   │   │   ├── routes_forensics.py   # Leak investigation & watermark extraction
-│   │   │   └── routes_ledger.py      # Merkle blockchain explorer & audits
-│   │   ├── core/
-│   │   │   ├── types.py          # Strict Pydantic v2 domain schemas
-│   │   │   └── state.py          # In-memory defence directory & doc store
-│   │   ├── crypto/               # SOLE OWNER of cryptographic primitives
-│   │   │   ├── pqc_kem.py        # ML-KEM-768 + X25519 Hybrid KEM
-│   │   │   ├── pqc_sig.py        # Ed25519 / ML-DSA Digital Signatures
-│   │   │   └── envelope.py       # AES-256-GCM Multi-Recipient Envelope
-│   │   ├── watermarking/         # SOLE OWNER of steganography
-│   │   │   ├── base.py           # Abstract BaseWatermarker interface
-│   │   │   ├── text_stego.py     # Unicode Zero-Width Steganography
-│   │   │   └── dct_qim.py        # 2D Block-DCT Quantization Index Modulation
-│   │   ├── provenance/           # SOLE OWNER of immutable blockchain
-│   │   │   ├── merkle_tree.py    # Merkle tree & inclusion proofs
-│   │   │   └── ledger.py         # SHA-256 Block-chained provenance ledger
-│   │   ├── forensics/            # SOLE OWNER of leak attribution
-│   │   │   └── attribution_engine.py # Reverse extraction & ledger reconciliation
-│   │   ├── config.py             # Centralized settings & audit secrets
-│   │   └── main.py               # Application entrypoint
-│   ├── tests/                    # Complete pytest suite
-│   │   ├── test_crypto.py        # PQC KEM, signatures, envelope tests
-│   │   ├── test_watermarking.py  # Zero-width text & DCT-QIM image tests
-│   │   ├── test_provenance.py    # Merkle proof & chain integrity tests
-│   │   └── test_forensics.py     # End-to-end leak attribution integration test
-│   └── requirements.txt
-├── frontend/                     # Modern React 18 + Vite + Tailwind CSS
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Header.jsx            # Navy clearance banner & navigation
-│   │   │   ├── DocumentPublisher.jsx # Envelope encryption & recipient selector
-│   │   │   ├── DecryptionViewer.jsx  # Recipient terminal & watermark inspector
-│   │   │   ├── ForensicsConsole.jsx  # Cyber leak investigation lab
-│   │   │   └── BlockchainExplorer.jsx# Merkle blockchain inspector & live audit
-│   │   ├── api.js                # Axios client
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── package.json
-│   └── vite.config.js
-├── docs/
-│   ├── SIH26237_PROBLEM_ANALYSIS.md   # Deep-dive problem breakdown & WESEE matrix
-│   └── MASTER_ARCHITECTURE_SPEC.md   # Mathematical equations & crypto specs
-└── README.md
-```
+### Trust Boundary Specification
+- The recipient workstation runs a local isolated worker listening exclusively on `127.0.0.1:8000`.
+- All passwords, private keys, CEKs, and decrypted plaintext remain strictly within the local recipient machine enclave.
+- No sensitive credentials or plaintext documents are ever transmitted over external networks or to cloud services.
+- The signed provenance receipt contains only public identifiers, cryptographic hashes, and digital signatures.
 
 ---
 
-## 3. Cryptographic & Mathematical Foundation
+## 3. Application Structure
 
-### 1. Hybrid Post-Quantum Key Encapsulation (ML-KEM-768 + X25519)
-For each recipient $i \in \{1, \dots, N\}$:
-$$\text{Classical: } k_{\text{classic}} = \text{ECDH}(sk_{\text{eph}}, pk_{X25519}^{(i)})$$
-$$\text{Lattice PQC: } (k_{\text{pqc}}, c_{\text{pqc}}) = \text{ML-KEM-768.Encaps}(pk_{\text{PQC}}^{(i)})$$
-$$K_{\text{shared}}^{(i)} = \text{HKDF-SHA256}(k_{\text{classic}} \parallel k_{\text{pqc}}, \text{salt}, \text{info})$$
-$$C_{\text{CEK}}^{(i)} = \text{AES-256-GCM.Encrypt}(K_{\text{shared}}^{(i)}, \text{CEK})$$
+The desktop application provides 6 primary modules:
 
-### 2. Multi-Recipient Envelope Storage
-$$\text{Payload} = \left\langle C_{\text{doc}}, \text{Nonce}, \text{AAD}, \{ (C_{\text{CEK}}^{(i)}, c_{\text{kem}}^{(i)}) \}_{i=1}^N \right\rangle$$
-Storage complexity remains **$O(1)$** with respect to document size, scaling by only a negligible 128 bytes per recipient envelope header.
-
-### 3. Visual 2D Block-DCT QIM
-For an $8 \times 8$ block luminance matrix $Y$:
-$$D = \text{DCT}(Y)$$
-Target AC mid-frequency coefficients $\Omega = \{(2,3), (3,2), (3,3), (2,4)\}$ are modulated:
-$$d_b = \begin{cases} +\frac{\Delta}{4} & \text{if bit } b = 1 \\ -\frac{\Delta}{4} & \text{if bit } b = 0 \end{cases}$$
-$$D^*[u, v] = \left\lfloor \frac{D[u, v] - d_b}{\Delta} + 0.5 \right\rfloor \Delta + d_b$$
-
-### 4. Non-Repudiation Merkle Receipt
-$$\text{Receipt} = \langle \text{ReceiptID}, \text{DocID}, \text{OfficerID}, H(\text{WM}), \text{DeviceID}, t \rangle$$
-$$\sigma = \text{Ed25519.Sign}(sk_{\text{officer}}, \text{Receipt})$$
-$$\text{MerkleRoot} = \text{ComputeMerkleRoot}(\{ H(\text{Receipt}_j) \}_{j=1}^M)$$
-$$\text{Block}_k = \text{SHA256}(k \parallel \text{Hash}_{k-1} \parallel \text{MerkleRoot} \parallel t)$$
+1. **DISTRIBUTE:** Select a PDF, configure classification, select authorized recipients, and generate portable `.secure` packages.
+2. **MY DOCUMENTS:** Recipient workstation enclave. Open `.secure` packages, enter passphrase, decrypt locally, embed dynamic watermark, generate ML-DSA receipt, and download watermarked PDF.
+3. **PEOPLE / IDENTITIES:** Recipient registry managing post-quantum cryptographic profiles and Argon2id credential vaults.
+4. **FORENSICS:** Ingest leaked PDF documents or text excerpts, recover watermark IDs, verify signatures and Merkle proofs, and output deterministic attribution reports.
+5. **PROVENANCE:** Multi-validator permissioned DLT explorer displaying chained blocks, Merkle tree roots, and 3-of-4 quorum signatures.
+6. **SECURITY:** Validator network monitoring, certificate revocation lists (CRL), document access retraction, and live historical tamper detection audits.
 
 ---
 
-## 4. Pre-Enrolled Naval Officer Directory
+## 4. Automated Test Suite (18 Tests)
 
-The system includes simulated Indian Navy commands with active keypairs:
-
-| Officer ID | Name & Rank | Command Unit | Clearance |
-| :--- | :--- | :--- | :--- |
-| `DEF-NAVY-0842` | **Cdr. Rajesh Sharma** | Western Naval Command (WNC) — INS Vikrant Ops | `TOP SECRET // OPERATIONAL` |
-| `DEF-NAVY-1109` | **Lt. Cdr. Priya Menon** | Directorate of Naval Intelligence (DNI) | `TOP SECRET // CRYPTO` |
-| `DEF-NAVY-0318` | **Capt. Vikram Sengupta** | Eastern Fleet Headquarters (Visakhapatnam) | `SECRET // MARITIME COMMAND` |
-| `DEF-NAVY-0771` | **Cdr. Arunava Roy** | WESEE New Delhi | `TOP SECRET // R&D` |
-
----
-
-## 5. Verification & Automated Test Suite
-
-All 8 comprehensive unit and integration tests pass cleanly:
+The test suite thoroughly verifies all cryptographic, watermarking, DLT, and operational requirements:
 
 ```bash
-# Run pytest test suite from project root:
 python -m pytest backend/tests -v
 ```
 
-### Test Coverage Results:
-- `test_hybrid_pqc_kem_flow` — **PASSED**: Verifies ML-KEM-768 + X25519 key agreement and quantum resistance.
-- `test_digital_signature_flow` — **PASSED**: Verifies Ed25519 signing and tamper detection.
-- `test_multi_recipient_envelope_encryption` — **PASSED**: Verifies single-ciphertext multi-recipient decapsulation.
-- `test_end_to_end_leak_attribution_workflow` — **PASSED**: End-to-end simulation from classified publish $\rightarrow$ officer decryption $\rightarrow$ unauthorized leak $\rightarrow$ forensic attribution with $99\%$ confidence.
-- `test_merkle_tree_proof_verification` — **PASSED**: Merkle inclusion proof mathematically verified.
-- `test_provenance_ledger_lifecycle` — **PASSED**: Genesis block creation, receipt mining, and chain integrity audit.
-- `test_text_zero_width_watermarking` — **PASSED**: Invisible Unicode steganography embedding, extraction, and HMAC verification.
-- `test_dct_qim_watermarking` — **PASSED**: 2D Block-DCT QIM multi-coefficient embedding and extraction with 0.0 bit error rate.
+### Verified Test Cases:
+1. `backend/tests/test_crypto.py::test_real_nist_fips_203_ml_kem_768` — Real NIST FIPS 203 ML-KEM-768 encapsulation/decapsulation.
+2. `backend/tests/test_crypto.py::test_real_nist_fips_204_ml_dsa_65` — Real NIST FIPS 204 ML-DSA-65 key generation, signing, and verification.
+3. `backend/tests/test_crypto.py::test_argon2id_credential_vault` — Argon2id vault password protection, wrong password rejection.
+4. `backend/tests/test_crypto.py::test_single_ciphertext_multi_recipient_envelope` — Single document ciphertext with multi-recipient wrapped keys.
+5. `backend/tests/test_crypto.py::test_secure_container_integrity_and_tamper` — `.secure` container serialization, integrity check, tamper rejection.
+6. `backend/tests/test_forensics.py::test_end_to_end_real_pdf_leak_attribution` — End-to-end real PDF leak attribution without passwords or private keys.
+7. `backend/tests/test_forensics.py::test_tampered_or_unmarked_pdf_abstains` — Unmarked or tampered documents abstain from false attribution.
+8. `backend/tests/test_forensics.py::test_air_gapped_offline_operation` — Complete verification pipeline runs without network access.
+9. `backend/tests/test_full_sih_verification.py::test_complete_sih26237_end_to_end_pipeline` — Full 16-point operational invariant test.
+10. `backend/tests/test_live_api.py::test_live_server_end_to_end_flow` — Live REST API integration test across all 6 tabs.
+11. `backend/tests/test_provenance.py::test_merkle_tree_proof_verification` — Merkle tree inclusion proof validation.
+12. `backend/tests/test_provenance.py::test_provenance_ledger_and_validator_quorum` — Ledger block chaining and validator signature commitment.
+13. `backend/tests/test_provenance.py::test_ledger_tampering_detection` — Historical block modification detected and rejected.
+14. `backend/tests/test_provenance.py::test_4_node_validator_quorum` — 4 logical permissioned validators with 3-of-4 quorum rule.
+15. `backend/tests/test_provenance.py::test_revocation_enforcement` — Recipient credential and document revocation enforcement.
+16. `backend/tests/test_watermarking.py::test_text_zero_width_watermarking` — Invisible Unicode zero-width steganography.
+17. `backend/tests/test_watermarking.py::test_dct_qim_watermarking` — 2D Block-DCT QIM embedding and extraction.
+18. `backend/tests/test_watermarking.py::test_pdf_steganography_unique_session_fingerprints` — Unique session and recipient fingerprints per decryption.
 
 ---
 
-## 6. Quickstart: Running the System Locally
+## 5. Launching the Standalone Desktop Application
 
-### Prerequisites
-- Python 3.10+ (tested on Python 3.14)
-- Node.js 18+ and npm
+### Launch Command
+To launch the complete application with its pinned local Electron binary and Python enclave worker:
 
-### Step 1: Start Backend API Server
-```bash
-cd backend
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```cmd
+run_desktop.bat
 ```
-- Interactive Swagger UI: `http://127.0.0.1:8000/docs`
-- ReDoc API Reference: `http://127.0.0.1:8000/redoc`
 
-### Step 2: Start Frontend Tactical Command Center
-In a new terminal:
-```bash
-cd frontend
-npm.cmd run dev
+Or via PowerShell:
+```powershell
+.\run_desktop.ps1
 ```
-- Open browser at `http://localhost:5173`
+
+The launcher:
+- Verifies that the local Electron binary is present.
+- Builds production frontend assets if missing.
+- Starts the isolated Python cryptographic worker on `127.0.0.1:8000`.
+- Launches the hardened Electron window with strict CSP, isolated contexts, and blocked external navigation.
 
 ---
 
-## 7. Connecting to GitHub
+## 6. Security & Truthfulness Assertions
 
-To push this codebase to your GitHub account:
-
-```bash
-# 1. Initialize git (if not already done)
-git init
-
-# 2. Add all files and commit
-git add .
-git commit -m "feat: complete WESEE cryptographic attribution & provenance system for SIH 2026 PS 26237"
-
-# 3. Rename branch to main
-git branch -M main
-
-# 4. Create a new repository on github.com (e.g. 'sih2026-wesee-cryptographic-provenance')
-# Then add your remote:
-git remote add origin https://github.com/<YOUR_GITHUB_USERNAME>/<YOUR_REPO_NAME>.git
-
-# 5. Push to GitHub
-git push -u origin main
-```
-
----
-
-## 8. Authors & Acknowledgements
-- Developed for **Smart India Hackathon 2026**.
-- Problem Statement ID: **26237** (PS #237).
-- Specialized for the **Ministry of Defence, Indian Navy (WESEE)**.
+| Property | Implementation Reality |
+| :--- | :--- |
+| **PQC Algorithms** | Real C-extensions via `pqcrypto` implementing NIST FIPS 203 (ML-KEM-768) and FIPS 204 (ML-DSA-65). |
+| **Credential Protection** | Argon2id memory-hard KDF + AES-256-GCM software vault. Keys reside decrypted in memory only during active execution. |
+| **Validator Consensus** | 4 logical permissioned notary identities (`NODE-01`..`04`) with 3-of-4 quorum enforcement. |
+| **Forensic Watermarking** | Digital-PDF forensic watermarking with tested resilience against digital document forwarding and text copy-paste. |
+| **Attribution Certainty** | Deterministic cryptographic verification based on digital signatures and Merkle inclusion proofs. |
+| **Air-Gap Capability** | Operates entirely without external internet connections or third-party cloud dependencies. |

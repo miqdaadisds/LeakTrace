@@ -185,7 +185,7 @@ export default function ForensicsConsole() {
                     </div>
                   </div>
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-600 text-white shadow-sm">
-                    MATHEMATICALLY PROVEN
+                    ATTRIBUTION VERIFIED
                   </span>
                 </div>
 
@@ -194,7 +194,7 @@ export default function ForensicsConsole() {
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
-                        Leaker Identity
+                        Attributed Recipient
                       </div>
                       <div className="text-base font-bold text-slate-900">
                         {attributionResult.recipient_name} ({attributionResult.recipient_id})
@@ -214,10 +214,10 @@ export default function ForensicsConsole() {
                   </div>
                 </div>
 
-                {/* Evidence Verification Checkpoints */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* Evidence Verification Checkpoints: 4 Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                   <div className="p-3 rounded-xl bg-white/80 border border-emerald-200 text-center space-y-1">
-                    <div className="text-[10px] font-semibold text-slate-500">Watermark Status</div>
+                    <div className="text-[10px] font-semibold text-slate-500">Watermark</div>
                     <div className="text-xs font-bold text-emerald-700 flex items-center justify-center space-x-1">
                       <Check className="w-3.5 h-3.5" />
                       <span>{attributionResult.watermark_status}</span>
@@ -225,7 +225,7 @@ export default function ForensicsConsole() {
                   </div>
 
                   <div className="p-3 rounded-xl bg-white/80 border border-emerald-200 text-center space-y-1">
-                    <div className="text-[10px] font-semibold text-slate-500">ML-DSA-65 Signature</div>
+                    <div className="text-[10px] font-semibold text-slate-500">ML-DSA-65</div>
                     <div className="text-xs font-bold text-emerald-700 flex items-center justify-center space-x-1">
                       <Check className="w-3.5 h-3.5" />
                       <span>{attributionResult.signature_status}</span>
@@ -233,10 +233,18 @@ export default function ForensicsConsole() {
                   </div>
 
                   <div className="p-3 rounded-xl bg-white/80 border border-emerald-200 text-center space-y-1">
-                    <div className="text-[10px] font-semibold text-slate-500">DLT Ledger Proof</div>
+                    <div className="text-[10px] font-semibold text-slate-500">Ledger / Merkle</div>
                     <div className="text-xs font-bold text-emerald-700 flex items-center justify-center space-x-1">
                       <Check className="w-3.5 h-3.5" />
                       <span>{attributionResult.ledger_status}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-white/80 border border-emerald-200 text-center space-y-1">
+                    <div className="text-[10px] font-semibold text-slate-500">Quorum</div>
+                    <div className="text-xs font-bold text-emerald-700 flex items-center justify-center space-x-1">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>3/4 NODES</span>
                     </div>
                   </div>
                 </div>
