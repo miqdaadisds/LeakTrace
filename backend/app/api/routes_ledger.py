@@ -80,3 +80,16 @@ def get_validators():
         "total_nodes": len(validator_network.nodes),
         "validators": validator_network.get_validators_info()
     }
+
+
+class RestoreRecordRequest(BaseModel):
+    block_index: int = Field(default=1, ge=0)
+    original_recipient: str = Field(default="USER-BOB")
+
+
+@router.post("/restore")
+def restore_historical_record(req: RestoreRecordRequest):
+    """Restores a tampered block back to its valid cryptographic state."""
+    provenance_ledger.restore_historical_record(req.block_index, req.original_recipient)
+    is_valid, msg, _ = provenance_ledger.verify_chain_integrity()
+    return {"status": "RESTORED", "is_valid": is_valid, "message": msg}

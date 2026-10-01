@@ -238,6 +238,13 @@ class ProvenanceLedger:
             "message": "Block data modified. Run verify_chain_integrity to observe tamper detection failure."
         }
 
+    def restore_historical_record(self, block_index: int, original_recipient_id: str) -> None:
+        """Restores a historical record after running a tamper verification test."""
+        if 0 <= block_index < len(self._chain):
+            target_block = self._chain[block_index]
+            if target_block.receipts:
+                target_block.receipts[0].recipient_id = original_recipient_id
+
     def get_chain(self) -> List[ProvenanceBlock]:
         return self._chain
 
