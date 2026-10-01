@@ -26,7 +26,7 @@ The architecture is divided into five decoupled subsystems, each adhering to the
 |  |    4. FORENSIC INVESTIGATOR      |          |       3. IMMUTABLE PROVENANCE LEDGER            | |
 |  | - Leak Extractor (Text / DCT-QIM)|          | - Cryptographic Decryption Receipts (Ed25519)   | |
 |  | - HMAC Authenticity Verification |  <=====  | - Tamper-Evident Merkle Tree Chain              | |
-|  | - Non-Repudiable Attribution    |          | - Zero-Knowledge Hash Integrity Proofs          | |
+|  | - Non-Repudiable Attribution     |          | - Zero-Knowledge Hash Integrity Proofs          | |
 |  +----------------------------------+          +-------------------------------------------------+ |
 +----------------------------------------------------------------------------------------------------+
 ```
