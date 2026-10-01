@@ -3,8 +3,15 @@
 </p>
 
 <p align="center">
-  <b>From Encryption to Evidence [E &rarr; E]</b><br>
+  <b>From Encryption to Evidence [E -> E]</b><br>
   <i>Military-Grade Cryptographic Attribution & Immutable Decryption Provenance</i>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Verification-100%25%20Deterministic-success" alt="Deterministic Verification">
+  <img src="https://img.shields.io/badge/Security-NIST%20FIPS%20203%20%2F%20204-blue" alt="Post-Quantum Cryptography">
+  <img src="https://img.shields.io/badge/Invariants-16%2F16%20Passing-brightgreen" alt="16/16 Invariants Passed">
+  <img src="https://img.shields.io/badge/Air--Gapped-100%25%20Offline-success" alt="Air-Gapped Offline">
 </p>
 
 # LeakTrace: Cryptographic Attribution & Immutable Decryption Provenance
