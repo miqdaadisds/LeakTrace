@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="docs/assets/logo.png" alt="LeakTrace Official Emblem" width="230" style="border-radius: 16px;">
-</p>
+ 
 
 <p align="center">
   <b>From Encryption to Evidence [E -> E]</b><br>
