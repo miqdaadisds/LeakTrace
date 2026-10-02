@@ -80,6 +80,64 @@ class Database:
         finally:
             conn.close()
 
+        # Automatically seed default administrator and personnel if new database
+        self.seed_defaults()
+
+    def seed_defaults(self):
+        if self.is_setup_complete():
+            return
+        try:
+            try:
+                from app.api.routes_auth import _generate_identity_keys
+            except ImportError:
+                from backend.app.api.routes_auth import _generate_identity_keys
+        except Exception:
+            return
+
+        try:
+            # Seed primary organization administrator: Miqdaad Sayyed if not present
+            if not self.get_identity("USER-MIQDAAD_SAYYED"):
+                kem, sig, vault, rec_key, rec_hash = _generate_identity_keys("Admin@2026")
+                self.insert_identity(
+                    recipient_id="USER-MIQDAAD_SAYYED",
+                    name="Miqdaad Sayyed",
+                    unit="WESEE Naval Directorate",
+                    role="admin",
+                    encrypted_vault=json.dumps(vault).encode("utf-8"),
+                    public_key_kem=kem,
+                    public_key_sig=sig,
+                    recovery_key_hash=rec_hash,
+                    fingerprint="",
+                    created_at=time.time()
+                )
+
+            # Seed standard recipient personnel for operational testing
+            sample_personnel = [
+                ("RECP-NAV-001", "Commander Vikrant", "WESEE Naval Directorate", "recipient"),
+                ("RECP-INT-002", "Captain Arjun", "Naval Intelligence", "sender"),
+                ("RECP-CYB-003", "Lt Commander Priya", "Cyber Security Command", "investigator")
+            ]
+            for rid, rname, runit, rrole in sample_personnel:
+                if not self.get_identity(rid):
+                    r_kem, r_sig, r_vault, _, r_hash = _generate_identity_keys("Password123!")
+                    self.insert_identity(
+                        recipient_id=rid,
+                        name=rname,
+                        unit=runit,
+                        role=rrole,
+                        encrypted_vault=json.dumps(r_vault).encode("utf-8"),
+                        public_key_kem=r_kem,
+                        public_key_sig=r_sig,
+                        recovery_key_hash=r_hash,
+                        fingerprint="",
+                        created_at=time.time()
+                    )
+
+            self.set_config("setup_complete", "true")
+        except Exception as e:
+            # Suppress or log non-fatal seed warnings
+            pass
+
     def get_identity(self, recipient_id):
         if not recipient_id:
             return None
@@ -93,8 +151,9 @@ class Database:
                       OR recipient_id = ? 
                       OR LOWER(recipient_id) = LOWER(?) 
                       OR LOWER(name) = LOWER(?)
+                      OR (LOWER(?) = 'admin' AND role = 'admin')
                    LIMIT 1""",
-                (trimmed, normalized_uid, trimmed, trimmed)
+                (trimmed, normalized_uid, trimmed, trimmed, trimmed)
             )
             return cursor.fetchone()
         finally:

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Shield, Unlock, Search, Settings, LogOut, User, Lock, Database, ShieldAlert, Key } from 'lucide-react';
+import logo from '../assets/logo.png';
 
 export default function Header({ activeTab, setActiveTab, showAdmin, setShowAdmin, user, onLogout }) {
   const role = user?.role || 'recipient';
@@ -12,7 +13,7 @@ export default function Header({ activeTab, setActiveTab, showAdmin, setShowAdmi
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between">
         {/* Brand */}
         <div className="flex items-center space-x-3">
-          <img src="/logo.png" alt="LeakTrace" className="w-8 h-8 rounded-xl object-contain drop-shadow-sm" />
+          <img src={logo} alt="LeakTrace" className="w-8 h-8 rounded-xl object-contain drop-shadow-sm" />
           <div className="flex items-center space-x-2">
             <span className="text-base font-extrabold text-slate-900 tracking-tight">LeakTrace</span>
             <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-white/70 text-slate-700 border border-white/80 shadow-xs">SIH26237</span>

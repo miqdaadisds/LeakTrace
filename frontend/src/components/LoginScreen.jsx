@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldCheck, LogIn, UserPlus, Key, Copy, Check, Eye, EyeOff } from 'lucide-react';
 import { setupOrganization, login, register, recoverPassword } from '../api';
+import logo from '../assets/logo.png';
 
 export default function LoginScreen({ setupRequired, onLogin }) {
   const [mode, setMode] = useState(setupRequired ? 'setup' : 'login');
@@ -101,7 +102,7 @@ export default function LoginScreen({ setupRequired, onLogin }) {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="apple-glass-card max-w-md w-full p-8 space-y-6">
           <div className="text-center space-y-2">
-            <img src="/logo.png" alt="LeakTrace" className="w-16 h-16 mx-auto object-contain drop-shadow-md" />
+            <img src={logo} alt="LeakTrace" className="w-16 h-16 mx-auto object-contain drop-shadow-md" />
             <h2 className="text-xl font-bold text-slate-900">Save Your Recovery Key</h2>
             <p className="text-xs text-slate-500">
               This secret key is required to restore your identity or reset your password.
@@ -147,7 +148,7 @@ export default function LoginScreen({ setupRequired, onLogin }) {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="apple-glass-card max-w-md w-full p-8 space-y-6">
         <div className="text-center space-y-2">
-          <img src="/logo.png" alt="LeakTrace" className="w-20 h-20 mx-auto object-contain drop-shadow-md mb-1" />
+          <img src={logo} alt="LeakTrace" className="w-20 h-20 mx-auto object-contain drop-shadow-md mb-1" />
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
             {mode === 'setup' && 'Set Up LeakTrace'}
             {mode === 'login' && 'LeakTrace'}
