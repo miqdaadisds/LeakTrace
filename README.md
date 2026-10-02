@@ -196,9 +196,9 @@ Measured on local desktop workstation executing the complete 16-point invariant 
 | **Credential Protection** | Argon2id memory-hard KDF + Vault | **58.48 ms** | Resistant to GPU/ASIC dictionary attacks |
 | **Forensic Watermarking** | Triple-layer (DCT-QIM + Stego + Zero-width) | **0.43 ms** | **PSNR > 48.2 dB** / 100% extraction rate |
 | **Digital Signing** | NIST FIPS 204 ML-DSA-65 | **0.23 ms** | 3309-byte post-quantum digital signature |
-| **4-Node Quorum Commit** | 3-of-4 Notary Multi-Signature | **39.38 ms** | Byzantine Fault Tolerant (Offline) |
+| **4-Node Quorum Commit** | 3-of-4 Notary Multi-Signature | **39.38 ms** | Logical permissioned quorum (Offline) |
 | **Merkle Inclusion Proof** | SHA-256 Binary Hash Tree | **1.69 ms** | Cryptographic proof of inclusion |
-| **Blind Leak Attribution** | Forensic Attribution Engine | **5.32 ms** | **100% Deterministic Non-Repudiation** |
+| **Blind Leak Attribution** | Forensic Attribution Engine | **5.32 ms** | Deterministic cryptographic attribution |
 | **Total End-to-End Flow** | **Full 16-Invariant Pipeline** | **< 430 ms** | Zero network dependencies (Air-Gapped) |
 
 ---
