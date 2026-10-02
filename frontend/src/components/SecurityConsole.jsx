@@ -194,7 +194,7 @@ export default function SecurityConsole({ identities, activeDocs, onSecurityUpda
               <span>Cryptographic Tamper-Evidence & Audit Test</span>
             </h3>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Demonstrates that no single administrator or compromised node can modify historical records undetected.
+              Warning: This is a demonstration feature to test ledger immutability rules.
             </p>
           </div>
 
@@ -205,19 +205,8 @@ export default function SecurityConsole({ identities, activeDocs, onSecurityUpda
               className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-sm transition-all disabled:opacity-50"
             >
               {isTestingTamper ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldAlert className="w-3.5 h-3.5" />}
-              <span>Test Historical Tamper Detection</span>
+              <span>Test Tamper Detection</span>
             </button>
-
-            {tamperResult && (
-              <button
-                onClick={handleRestoreLedger}
-                disabled={isRestoring}
-                className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center space-x-1.5 shadow-sm transition-all"
-              >
-                {isRestoring ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-                <span>Restore Authentic Ledger</span>
-              </button>
-            )}
           </div>
         </div>
 
@@ -232,7 +221,7 @@ export default function SecurityConsole({ identities, activeDocs, onSecurityUpda
               {tamperResult.verification_result.detected_tampering ? (
                 <>
                   <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
-                  <span>TAMPER DETECTED: Single Administrator Tampering Blocked</span>
+                  <span>TAMPER DETECTED: Tampering Attempt Successfully Blocked by Quorum</span>
                 </>
               ) : (
                 <>

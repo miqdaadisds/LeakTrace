@@ -10,6 +10,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+try:
+    from app.db.database import Database
+    from app.auth import middleware
+    from app.api.routes_auth import router as auth_router
+except ImportError:
+    from backend.app.db.database import Database
+    from backend.app.auth import middleware
+    from backend.app.api.routes_auth import router as auth_router
+
 from app.api.routes_identity import router as identity_router
 from app.api.routes_distribution import router as distribution_router
 from app.api.routes_recipient import router as recipient_router
@@ -18,6 +27,13 @@ from app.api.routes_ledger import router as ledger_router
 from app.api.routes_security import router as security_router
 from app.core.state import system_state
 from app.provenance.ledger import provenance_ledger
+
+# Initialize SQLite database
+database = Database()
+database.initialize()
+middleware.db = database
+provenance_ledger.db = database
+system_state.sync_from_db(database)
 
 app = FastAPI(
     title="LeakTrace: Cryptographic Attribution & Provenance System",
@@ -43,6 +59,7 @@ app.add_middleware(
 )
 
 # Register modular API routes
+app.include_router(auth_router)
 app.include_router(identity_router)
 app.include_router(distribution_router)
 app.include_router(recipient_router)
@@ -83,14 +100,25 @@ def system_status():
         "kdf": "Argon2id",
         "recipients_enrolled": len(system_state.identities),
         "documents_active": len(system_state.document_metadata),
-        "packages_active": len(system_state.secure_packages),
         "blockchain_blocks_count": len(provenance_ledger.get_chain()),
         "ledger_verified": is_valid,
         "notary_quorum_status": "3-of-4 Quorum Active (4 Logical Validators NODE-01..04)"
     }
 
 
-# Mount built frontend production assets for seamless single-port hosting
+@app.get("/")
+def enclave_root():
+    return {
+        "status": "online",
+        "service": "LeakTrace Cryptographic Attribution & Provenance Enclave",
+        "version": "2.0.0",
+        "system_status": "/api/system/status",
+        "docs": "/docs"
+    }
+
+
+# Mount built frontend production assets for seamless single-port hosting if available
 frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if frontend_dist.exists() and (frontend_dist / "index.html").exists():
-    app.mount("/", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+    app.mount("/app", StaticFiles(directory=str(frontend_dist), html=True), name="frontend")
+

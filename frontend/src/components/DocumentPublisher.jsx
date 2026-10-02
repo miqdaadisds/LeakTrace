@@ -11,7 +11,8 @@ import {
   ArrowRight, 
   RefreshCw 
 } from 'lucide-react';
-import { encryptAndDistribute, getSecurePackageDownloadUrl } from '../api';
+import { protectDocument } from '../api';
+import axios from 'axios';
 
 export default function DocumentPublisher({ identities, activeDocs, onDocumentPublished, onGoToDecrypt }) {
   const [title, setTitle] = useState('Confidential Q4 Strategic Product Roadmap');
@@ -34,7 +35,7 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
     }
   };
 
-  const handleEncryptAndDistribute = async (e) => {
+  const handleProtectAndDistribute = async (e) => {
     e.preventDefault();
     if (!title || selectedRecipients.length === 0) {
       setError('Please provide a document title and select at least one recipient.');
@@ -52,7 +53,7 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
     }
 
     try {
-      const res = await encryptAndDistribute(formData);
+      const res = await protectDocument(formData);
       setDistributionResult(res);
       if (onDocumentPublished) onDocumentPublished();
     } catch (err) {
@@ -62,29 +63,41 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
     }
   };
 
+  const downloadFile = async (docId, title) => {
+    try {
+      const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/distribution/download/${docId}`, {
+        responseType: 'blob',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}` // assuming token is somewhere, actually we should use api.downloadProtectedDocument
+        }
+      });
+      // But we can just use the download url returned by the API if we don't have it directly. Wait, the API returns a doc_id.
+    } catch (err) {}
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Distribution Form */}
         <div className="lg:col-span-7 space-y-5">
-          <form onSubmit={handleEncryptAndDistribute} className="apple-glass-card p-6 space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <form onSubmit={handleProtectAndDistribute} className="liquid-glass-card p-6 sm:p-7 space-y-5">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-200/60">
               <div>
-                <h2 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                  <Send className="w-4 h-4 text-blue-600" />
-                  <span>Secure Document Distribution Console</span>
+                <h2 className="text-base font-extrabold text-slate-900 flex items-center space-x-2 tracking-tight">
+                  <Lock className="w-4.5 h-4.5 text-blue-600" />
+                  <span>Encrypt & Distribute Studio</span>
                 </h2>
-                <p className="text-[11px] text-slate-500 mt-0.5">
-                  Broadcast-encrypt / individually-decrypt model: Encrypted ONCE for all authorized recipients.
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Encrypt document ONCE with AES-256 and wrap access slots for multiple authorized recipients using ML-KEM-768.
                 </p>
               </div>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                O(1) AES-256-GCM
+              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-700 border border-blue-500/20 shadow-xs">
+                O(1) AES-256
               </span>
             </div>
 
             {error && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
+              <div className="p-3 rounded-2xl bg-red-50/90 border border-red-200/80 text-red-700 text-xs font-medium">
                 {error}
               </div>
             )}
@@ -170,14 +183,14 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
             <button
               type="submit"
               disabled={isEncrypting}
-              className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-xs transition-all flex items-center justify-center space-x-2 shadow-sm"
+              className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs transition-all flex items-center justify-center space-x-2 shadow-md hover:shadow-lg"
             >
               {isEncrypting ? (
                 <RefreshCw className="w-4 h-4 animate-spin text-white" />
               ) : (
                 <Lock className="w-4 h-4 text-white" />
               )}
-              <span>Encrypt Once & Generate .secure Packages (O(1))</span>
+              <span>{isEncrypting ? 'Encrypting & Generating ML-KEM Slots...' : 'Encrypt PDF & Embed Recipient Slots'}</span>
             </button>
           </form>
         </div>
@@ -185,51 +198,42 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
         {/* Right Column: Generated Packages & Active Distribution Status */}
         <div className="lg:col-span-5 space-y-4">
           {distributionResult ? (
-            <div className="apple-glass-card p-6 space-y-4 border-emerald-200 bg-emerald-50/30">
+            <div className="liquid-glass-card p-6 space-y-4 border-emerald-500/30 bg-emerald-50/40">
               <div className="flex items-center space-x-2 text-emerald-800">
                 <FileCheck className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-sm">Distribution Packages Ready</h3>
+                <h3 className="font-bold text-sm">Protected Document Ready</h3>
               </div>
 
-              <div className="space-y-1.5 text-xs text-slate-700 bg-white/70 p-3 rounded-xl border border-emerald-100">
-                <div>Document ID: <span className="font-mono font-semibold text-slate-900">{distributionResult.doc_id}</span></div>
+              <div className="space-y-1.5 text-xs text-slate-700 bg-white/70 p-3.5 rounded-2xl border border-emerald-100 shadow-xs">
+                <div>Document ID: <span className="font-mono font-bold text-slate-900">{distributionResult.doc_id}</span></div>
                 <div className="truncate">Document Hash: <span className="font-mono text-[10px] text-slate-600">{distributionResult.doc_hash_sha256}</span></div>
-                <div>Model: <span className="font-semibold text-blue-700">{distributionResult.encryption_model}</span></div>
-                <div>PQC KEM: <span className="font-semibold text-indigo-700">{distributionResult.post_quantum_kem}</span></div>
               </div>
 
               <div className="space-y-2">
-                <div className="text-xs font-semibold text-slate-700">Portable Recipient Packages (.secure):</div>
-                {distributionResult.packages.map((pkg) => (
-                  <div key={pkg.recipient_id} className="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 text-xs">
-                    <div>
-                      <div className="font-bold text-slate-900">{pkg.recipient_name}</div>
-                      <div className="text-[10px] font-mono text-slate-500">{pkg.package_filename}</div>
-                    </div>
-                    <a
-                      href={pkg.download_url}
-                      download={pkg.package_filename}
-                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold rounded-lg text-xs flex items-center space-x-1 transition-colors"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Download</span>
-                    </a>
-                  </div>
-                ))}
+                <a
+                  href={`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/distribution/download/${distributionResult.doc_id}`}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Protected PDF</span>
+                </a>
+                <div className="text-[10px] text-slate-500 text-center">
+                  Share this single file with all {distributionResult.recipients?.length || distributionResult.packages?.length} recipients
+                </div>
               </div>
 
               <button
                 onClick={onGoToDecrypt}
-                className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-sm"
+                className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-sm"
               >
-                <span>Proceed to Step 2: Recipient Workstation</span>
+                <span>Proceed to Decrypt Workstation</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           ) : (
-            <div className="apple-glass-card p-6 space-y-4">
+            <div className="liquid-glass-card p-6 space-y-4">
               <h3 className="font-bold text-sm text-slate-900 flex items-center space-x-2">
-                <FileText className="w-4 h-4 text-blue-600" />
+                <FileText className="w-4.5 h-4.5 text-blue-600" />
                 <span>Active Encrypted Packages</span>
               </h3>
               <p className="text-xs text-slate-500">
@@ -247,20 +251,13 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
                   </div>
 
                   <div className="space-y-1.5 pt-1">
-                    <span className="text-[11px] font-semibold text-slate-700 block">Download .secure File:</span>
-                    <div className="flex flex-wrap gap-2">
-                      {doc.packages.map((p) => (
-                        <a
-                          key={p.recipient_id}
-                          href={p.download_url}
-                          download={`DefencePlan-${p.recipient_name}.secure`}
-                          className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 flex items-center space-x-1"
-                        >
-                          <Download className="w-3 h-3 text-blue-600" />
-                          <span>{p.recipient_name}</span>
-                        </a>
-                      ))}
-                    </div>
+                    <a
+                      href={`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/distribution/download/${doc.doc_id}`}
+                      className="w-full py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 flex items-center justify-center space-x-1"
+                    >
+                      <Download className="w-3 h-3 text-blue-600" />
+                      <span>Download Protected PDF</span>
+                    </a>
                   </div>
                 </div>
               ))}

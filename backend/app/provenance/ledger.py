@@ -3,6 +3,7 @@ Immutable Decryption Provenance Ledger (Permissioned DLT).
 Append-only, tamper-evident cryptographic blockchain securing decryption receipts
 with SHA-256 block-chaining, Merkle root anchoring, and multi-validator notary quorum.
 Demonstrates that no single administrator or compromised node can modify historical records.
+Persists state to SQLite while preserving cryptographic immutability.
 """
 from typing import List, Optional, Tuple, Dict, Any
 import hashlib
@@ -14,15 +15,64 @@ from app.provenance.validator import validator_network
 
 
 class ProvenanceLedger:
-    def __init__(self):
+    def __init__(self, db=None):
+        self._db = None
         self._chain: List[ProvenanceBlock] = []
         self._pending_receipts: List[DecryptionProvenanceReceipt] = []
-        # Fast lookup indexes
-        self._receipt_by_watermark_id: Dict[str, Tuple[int, DecryptionProvenanceReceipt]] = {} # watermark_id -> (block_idx, receipt)
+        self._receipt_by_watermark_id: Dict[str, Tuple[int, DecryptionProvenanceReceipt]] = {}
         self._doc_receipts: Dict[str, List[DecryptionProvenanceReceipt]] = {}
-        
-        # Initialize Genesis Block
-        self._create_genesis_block()
+
+        if db:
+            self.set_db(db)
+        else:
+            self._create_genesis_block()
+
+    @property
+    def db(self):
+        return self._db
+
+    @db.setter
+    def db(self, database):
+        self.set_db(database)
+
+    def set_db(self, database):
+        self._db = database
+        if self._db and self._db.block_count() > 0:
+            self._chain = []
+            self._receipt_by_watermark_id = {}
+            self._doc_receipts = {}
+            self._create_genesis_block()
+            self._load_from_db()
+        elif not self._chain:
+            self._create_genesis_block()
+
+    def _load_from_db(self):
+        """Loads committed blockchain blocks and watermark indices from SQLite."""
+        if not self._db:
+            return
+        db_blocks = self._db.get_all_blocks()
+        for row in db_blocks:
+            receipts_data = json.loads(row["receipts_json"])
+            receipts = [DecryptionProvenanceReceipt(**r) for r in receipts_data]
+            endorsements = json.loads(row["endorsements_json"])
+
+            block = ProvenanceBlock(
+                block_index=row["block_index"],
+                timestamp=row["timestamp_utc"],
+                previous_hash=row["prev_hash"],
+                merkle_root=row["merkle_root"],
+                receipts=receipts,
+                validator_signatures=endorsements,
+                block_hash=row["block_hash"]
+            )
+            if not any(b.block_index == block.block_index for b in self._chain):
+                self._chain.append(block)
+
+            for r in receipts:
+                self._receipt_by_watermark_id[r.watermark_id] = (block.block_index, r)
+                if r.doc_id not in self._doc_receipts:
+                    self._doc_receipts[r.doc_id] = []
+                self._doc_receipts[r.doc_id].append(r)
 
     def _create_genesis_block(self):
         genesis_receipt = DecryptionProvenanceReceipt(
@@ -40,8 +90,7 @@ class ProvenanceLedger:
         )
         leaf_hash = MerkleTree.hash_leaf(json.dumps(genesis_receipt.model_dump(), sort_keys=True).encode("utf-8"))
         merkle_root = MerkleTree.compute_root([leaf_hash])
-        
-        # Multi-validator signatures on Genesis block
+
         validator_sigs = validator_network.endorse_block(
             block_index=0,
             prev_hash="0" * 64,
@@ -62,29 +111,55 @@ class ProvenanceLedger:
         self._chain.append(genesis_block)
         self._receipt_by_watermark_id[genesis_receipt.watermark_id] = (0, genesis_receipt)
 
+        if self.db and not self.db.get_block(0):
+            receipts_json = json.dumps([genesis_receipt.model_dump()])
+            endorsements_json = json.dumps(validator_sigs)
+            self.db.insert_block(
+                block_index=0,
+                block_hash=block_hash,
+                prev_hash="0" * 64,
+                merkle_root=merkle_root,
+                timestamp_utc=genesis_receipt.timestamp,
+                receipts_json=receipts_json,
+                endorsements_json=endorsements_json
+            )
+            self.db.insert_watermark_index(
+                watermark_id=genesis_receipt.watermark_id,
+                block_index=0,
+                recipient_id=genesis_receipt.recipient_id,
+                doc_id=genesis_receipt.doc_id,
+                session_id=genesis_receipt.session_id
+            )
+
     @staticmethod
     def _calculate_block_hash(
         index: int,
         prev_hash: str,
         merkle_root: str,
         timestamp: float,
-        validator_signatures: List[Dict[str, str]]
+        signatures: Dict[str, str]
     ) -> str:
-        sig_summary = ",".join(sorted(s.get("signature_b64", "")[:16] for s in validator_signatures))
-        payload = f"{index}|{prev_hash}|{merkle_root}|{timestamp}|{sig_summary}".encode("utf-8")
-        return hashlib.sha256(payload).hexdigest()
+        sig_canonical = json.dumps(signatures, sort_keys=True)
+        block_header = f"BLOCK:{index}|PREV:{prev_hash}|ROOT:{merkle_root}|TIME:{timestamp}|SIGS:{sig_canonical}"
+        return hashlib.sha256(block_header.encode("utf-8")).hexdigest()
 
     def commit_receipt(self, receipt: DecryptionProvenanceReceipt) -> Tuple[int, str]:
         """
         Commits a signed decryption receipt into the blockchain ledger.
         Collects multi-validator endorsements and mints a verified block.
+        Persists to SQLite if db is configured.
         Returns: (block_index, block_hash)
         """
         self._pending_receipts.append(receipt)
-        
+
         if receipt.doc_id not in self._doc_receipts:
             self._doc_receipts[receipt.doc_id] = []
         self._doc_receipts[receipt.doc_id].append(receipt)
+
+        if self._db:
+            latest = self._db.get_latest_block()
+            if latest and latest["block_index"] >= self._chain[-1].block_index:
+                self.set_db(self._db)
 
         prev_block = self._chain[-1]
         new_index = prev_block.block_index + 1
@@ -122,8 +197,34 @@ class ProvenanceLedger:
         for r in self._pending_receipts:
             self._receipt_by_watermark_id[r.watermark_id] = (new_index, r)
 
+        # Persist to SQLite database
+        if self.db:
+            receipts_json = json.dumps([r.model_dump() for r in new_block.receipts])
+            endorsements_json = json.dumps(validator_sigs)
+            self.db.insert_block(
+                block_index=new_index,
+                block_hash=block_hash,
+                prev_hash=prev_block.block_hash,
+                merkle_root=merkle_root,
+                timestamp_utc=now,
+                receipts_json=receipts_json,
+                endorsements_json=endorsements_json
+            )
+            for r in new_block.receipts:
+                self.db.insert_watermark_index(
+                    watermark_id=r.watermark_id,
+                    block_index=new_index,
+                    recipient_id=r.recipient_id,
+                    doc_id=r.doc_id,
+                    session_id=r.session_id
+                )
+
         self._pending_receipts = []
         return new_index, block_hash
+
+    def commit_revocation_event(self, revocation_receipt: DecryptionProvenanceReceipt) -> Tuple[int, str]:
+        """Revocations are committed as new append-only blocks, preserving all history."""
+        return self.commit_receipt(revocation_receipt)
 
     def lookup_by_watermark_id(self, wm_id: str) -> Optional[Tuple[int, DecryptionProvenanceReceipt]]:
         """Finds the corresponding block index and receipt for an opaque forensic watermark_id."""
@@ -203,7 +304,7 @@ class ProvenanceLedger:
                 return False, f"Tampered block hash at block {i}: header modified.", audit_trail
 
             # 4. Multi-validator quorum verification
-            if block.block_index > 0:  # Skip genesis mock for validator test
+            if block.block_index > 0:
                 is_quorum, count, quorum_desc = validator_network.verify_block_quorum(
                     block.block_index, block.previous_hash, block.merkle_root, block.timestamp, block.validator_signatures
                 )
@@ -214,36 +315,6 @@ class ProvenanceLedger:
             audit_trail.append(step_info)
 
         return True, "Blockchain ledger integrity 100% verified across all blocks and multi-validator notary nodes.", audit_trail
-
-    def tamper_historical_record(self, block_index: int, fake_recipient_id: str = "COMPROMISED-ATTACKER") -> Dict[str, Any]:
-        """
-        Simulates an unauthorized database write / single-admin tampering attempt.
-        Modifies a historical decryption receipt in place to test whether the system detects it.
-        """
-        if block_index < 0 or block_index >= len(self._chain):
-            raise IndexError("Block index out of bounds.")
-
-        target_block = self._chain[block_index]
-        if not target_block.receipts:
-            raise ValueError("Target block contains no receipts to tamper.")
-
-        original_recipient = target_block.receipts[0].recipient_id
-        # Silently mutate the record
-        target_block.receipts[0].recipient_id = fake_recipient_id
-
-        return {
-            "tampered_block_index": block_index,
-            "original_recipient_id": original_recipient,
-            "tampered_recipient_id": fake_recipient_id,
-            "message": "Block data modified. Run verify_chain_integrity to observe tamper detection failure."
-        }
-
-    def restore_historical_record(self, block_index: int, original_recipient_id: str) -> None:
-        """Restores a historical record after running a tamper verification test."""
-        if 0 <= block_index < len(self._chain):
-            target_block = self._chain[block_index]
-            if target_block.receipts:
-                target_block.receipts[0].recipient_id = original_recipient_id
 
     def get_chain(self) -> List[ProvenanceBlock]:
         return self._chain

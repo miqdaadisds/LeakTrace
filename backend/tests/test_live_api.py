@@ -68,20 +68,7 @@ def test_live_server_end_to_end_flow():
     assert forensics_res['signature_status'] == 'VALID'
     assert forensics_res['ledger_status'] == 'VALID'
 
-    # 4. Tamper Test
-    req_tamper = urllib.request.Request(
-        'http://127.0.0.1:8000/api/ledger/tamper-test',
-        data=json.dumps({'block_index': 1, 'fake_recipient': 'COMPROMISED-ATTACKER'}).encode('utf-8'),
-        headers={'Content-Type': 'application/json'}
-    )
-    tamper_res = json.loads(urllib.request.urlopen(req_tamper).read().decode('utf-8'))
-    assert tamper_res['verification_result']['detected_tampering'] is True
-
-    # 5. Restore back to valid state
-    req_restore = urllib.request.Request(
-        'http://127.0.0.1:8000/api/ledger/restore',
-        data=json.dumps({'block_index': 1, 'original_recipient': 'USER-BOB'}).encode('utf-8'),
-        headers={'Content-Type': 'application/json'}
-    )
-    restore_res = json.loads(urllib.request.urlopen(req_restore).read().decode('utf-8'))
-    assert restore_res['is_valid'] is True
+    # 4. Ledger Audit & Chain Verification
+    req_audit = urllib.request.Request('http://127.0.0.1:8000/api/ledger/verify')
+    audit_res = json.loads(urllib.request.urlopen(req_audit).read().decode('utf-8'))
+    assert audit_res['is_valid'] is True

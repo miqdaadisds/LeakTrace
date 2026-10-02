@@ -1,3 +1,9 @@
+try:
+    from backend.app.db.database import Database
+except ImportError:
+    pass
+
+db = None
 """
 Application State & Cryptographic Identity Directory for NISHAN-PQ (SIH26237).
 Maintains registered recipient public profiles (Alice, Bob, Charlie), their Argon2id encrypted
@@ -11,7 +17,6 @@ from app.crypto.pqc_kem import HybridPQCKEM
 from app.crypto.pqc_sig import DigitalSignatureManager
 from app.crypto.vault import EncryptedCredentialVault
 from app.crypto.envelope import MultiRecipientEnvelope
-from app.crypto.container import SecureContainerFormat
 from app.core.types import RecipientProfile
 from app.core.pdf_generator import generate_sample_navy_pdf
 from app.forensics.attribution_engine import forensic_engine
@@ -27,7 +32,9 @@ class RegisteredIdentity:
         pub_x25519: bytes,
         pub_pqc: bytes,
         pub_sig: bytes,
-        encrypted_vault: Dict[str, Any]
+        encrypted_vault: Dict[str, Any],
+        role: str = 'recipient',
+        recovery_key_hash: str = None
     ):
         self.recipient_id = recipient_id
         self.name = name
@@ -39,6 +46,8 @@ class RegisteredIdentity:
         self.pub_pqc_b64 = base64.b64encode(pub_pqc).decode("utf-8")
         self.pub_sig_b64 = base64.b64encode(pub_sig).decode("utf-8")
         self.encrypted_vault = encrypted_vault
+        self.role = role
+        self.recovery_key_hash = recovery_key_hash
 
         # Compute public key SHA-256 fingerprint
         combined_pub = pub_x25519 + pub_pqc + pub_sig
@@ -52,7 +61,10 @@ class RegisteredIdentity:
             public_key_x25519_b64=self.pub_x25519_b64,
             public_key_pqc_b64=self.pub_pqc_b64,
             public_key_sig_b64=self.pub_sig_b64,
-            fingerprint=self.fingerprint
+            fingerprint=self.fingerprint,
+            role=self.role,
+            approved=(self.role != 'pending'),
+            recovery_key_hash=self.recovery_key_hash
         )
 
 
@@ -63,7 +75,8 @@ class SystemState:
         self.original_pdfs: Dict[str, bytes] = {}
         # doc_id -> metadata
         self.document_metadata: Dict[str, Dict[str, Any]] = {}
-        # (doc_id, recipient_id) -> .secure package bytes
+        # doc_id -> protected PDF bytes
+        self.protected_pdfs: Dict[str, bytes] = {}
         self.secure_packages: Dict[str, bytes] = {}
         # Revocation registry for access control and certificate revocation
         self.revoked_identities: Dict[str, Dict[str, Any]] = {}
@@ -148,6 +161,7 @@ class SystemState:
                 recipient_id=r_id,
                 name=name,
                 unit=unit,
+                role='recipient',
                 pub_x25519=pub_x,
                 pub_pqc=pub_pqc,
                 pub_sig=pub_sig,
@@ -166,9 +180,12 @@ class SystemState:
     def _initialize_seed_distribution(self):
         """
         Synthesizes the reference document 'Confidential Q4 Strategic Product Roadmap',
-        encrypts it ONCE with AES-256-GCM, and packages it into individual .secure files
-        for Alice, Bob, and Charlie.
+        protects it with genuine AES-256 PDF encryption and ML-KEM recipient access slots,
+        and makes the single protected PDF available for Alice, Bob, and Charlie.
         """
+        import os
+        from app.crypto.pdf_protector import PdfProtector
+
         doc_id = "DOC-7F3A29B1"
         title = "Confidential Q4 Strategic Product Roadmap"
         classification = "CONFIDENTIAL // RESTRICTED"
@@ -185,51 +202,86 @@ class SystemState:
 
         pdf_bytes = generate_sample_navy_pdf(title, doc_id, classification, body)
         self.original_pdfs[doc_id] = pdf_bytes
+        # Generate Document Open Secret and wrap for all enrolled recipients
+        doc_open_secret = os.urandom(32).hex()
+        dos_bytes = doc_open_secret.encode("utf-8")
+        recipient_slots = []
+        all_rcpt_ids = list(self.identities.keys()) if self.identities else ["USER-ALICE", "USER-BOB", "USER-CHARLIE"]
+        for r_id in all_rcpt_ids:
+            if r_id in self.identities:
+                identity = self.identities[r_id]
+                wrap = MultiRecipientEnvelope.wrap_cek_for_recipient(
+                    cek=dos_bytes,
+                    recipient_id=r_id,
+                    pub_x25519_bytes=identity.pub_x25519_bytes,
+                    pub_pqc_bytes=identity.pub_pqc_bytes
+                )
+                recipient_slots.append(wrap)
+
         self.document_metadata[doc_id] = {
             "doc_id": doc_id,
             "title": title,
             "classification": classification,
             "original_filename": original_filename,
             "doc_hash_sha256": hashlib.sha256(pdf_bytes).hexdigest(),
-            "authorized_recipients": ["USER-ALICE", "USER-BOB", "USER-CHARLIE"]
+            "authorized_recipients": all_rcpt_ids
         }
 
-        # Encrypt ONCE
-        cek, encrypted_payload = MultiRecipientEnvelope.encrypt_document_bytes(
-            document_bytes=pdf_bytes,
+        protected_pdf = PdfProtector.protect(
+            source_pdf_bytes=pdf_bytes,
             doc_id=doc_id,
             title=title,
-            classification=classification,
-            publisher_id="SECURE-PUBLISHER-HQ"
+            doc_open_secret=doc_open_secret,
+            recipient_slots=recipient_slots
         )
+        self.protected_pdfs[doc_id] = protected_pdf
+        self.secure_packages[f"{doc_id}:ALL"] = protected_pdf
 
-        # Wrap for each recipient and generate .secure packages
-        for r_id in ["USER-ALICE", "USER-BOB", "USER-CHARLIE"]:
-            identity = self.identities[r_id]
-            wrapped_cek = MultiRecipientEnvelope.wrap_cek_for_recipient(
-                cek=cek,
-                recipient_id=r_id,
-                pub_x25519_bytes=identity.pub_x25519_bytes,
-                pub_pqc_bytes=identity.pub_pqc_bytes
+    def _register_db_row(self, row):
+        """Converts an SQLite identity row into a RegisteredIdentity."""
+        try:
+            import json
+            raw_vault_data = row["encrypted_vault"]
+            if isinstance(raw_vault_data, (bytes, bytearray)):
+                raw_vault_data = raw_vault_data.decode("utf-8")
+            raw_vault = json.loads(raw_vault_data) if isinstance(raw_vault_data, str) else raw_vault_data
+            vault = raw_vault.get("primary", raw_vault)
+            pub_kem = row["public_key_kem"]
+            pub_x = pub_kem[:32]
+            pub_pqc = pub_kem[32:]
+            pub_sig = row["public_key_sig"]
+
+            ident = RegisteredIdentity(
+                recipient_id=row["recipient_id"],
+                name=row["name"],
+                unit=row["unit"],
+                pub_x25519=pub_x,
+                pub_pqc=pub_pqc,
+                pub_sig=pub_sig,
+                encrypted_vault=vault,
+                role=row["role"] if "role" in row.keys() else "recipient",
+                recovery_key_hash=row["recovery_key_hash"] if "recovery_key_hash" in row.keys() else None
             )
-
-            pkg = SecureContainerFormat.pack(
-                doc_id=doc_id,
-                title=title,
-                original_filename=original_filename,
-                classification=classification,
-                doc_hash_sha256=encrypted_payload["doc_hash_sha256"],
-                recipient_id=r_id,
-                recipient_name=identity.name,
-                recipient_public_kem_b64=identity.pub_pqc_b64,
-                recipient_public_sig_b64=identity.pub_sig_b64,
-                encrypted_vault=identity.encrypted_vault,
-                wrapped_cek=wrapped_cek,
-                encrypted_payload=encrypted_payload
+            self.identities[row["recipient_id"]] = ident
+            forensic_engine.register_recipient_identity(
+                recipient_id=row["recipient_id"],
+                name=row["name"],
+                unit=row["unit"],
+                public_key_sig_b64=ident.pub_sig_b64
             )
+            return ident
+        except Exception as e:
+            return None
 
-            pkg_key = f"{doc_id}:{r_id}"
-            self.secure_packages[pkg_key] = SecureContainerFormat.serialize_to_bytes(pkg)
+    def sync_from_db(self, db_instance):
+        """Synchronizes identities and protected documents from SQLite database into system state."""
+        if not db_instance:
+            return
+        rows = db_instance.list_identities()
+        for row in rows:
+            self._register_db_row(row)
+        # Refresh seed distribution so newly synced identities have access slots
+        self._initialize_seed_distribution()
 
     def register_new_identity(self, recipient_id: str, name: str, unit: str, password: str) -> RegisteredIdentity:
         """Enrolls a brand new recipient with generated ML-KEM + ML-DSA keys and Argon2id vault."""
@@ -248,6 +300,7 @@ class SystemState:
             recipient_id=recipient_id,
             name=name,
             unit=unit,
+                role='recipient',
             pub_x25519=pub_x,
             pub_pqc=pub_pqc,
             pub_sig=pub_sig,
@@ -259,7 +312,7 @@ class SystemState:
             recipient_id=recipient_id,
             name=name,
             unit=unit,
-            public_key_sig_b64=identity.pub_sig_b64
+                public_key_sig_b64=identity.pub_sig_b64
         )
         return identity
 

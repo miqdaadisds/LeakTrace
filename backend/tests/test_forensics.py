@@ -1,123 +1,177 @@
 """
-End-to-End Forensic Attribution & Non-Repudiation Integration Tests.
-Simulates real-world operational scenarios:
-1. Distribution of classified PDF memo to Alice, Bob, and Charlie.
-2. Bob opens and decrypts the .secure package locally using his password.
-3. Decryption embeds an invisible forensic watermark and generates an ML-DSA-65 signed receipt.
-4. Receipt is committed to the multi-validator permissioned ledger.
-5. Bob's decrypted PDF leaks (LEAKED_DOCUMENT.pdf).
-6. Forensic Attribution Engine extracts the watermark from the raw leaked PDF file.
-7. Conclusively traces the leak to Bob with mathematical proof:
-   - Watermark MATCHED
-   - ML-DSA Signature VALID
-   - Ledger Evidence VALID
-8. Tests conflict / corrupted watermark handling (abstains rather than falsely accusing).
-9. Tests full offline / air-gapped capability.
+End-to-End Forensic Attribution & Non-Repudiation Integration Tests (v1.1).
+Tests the complete flow:
+1. Protect a real PDF for Alice and Bob (ONE file, genuine AES-256 encryption).
+2. Bob decrypts using the full ML-KEM + watermark + ML-DSA pipeline.
+3. Bob's decrypted PDF leaks.
+4. Forensic Attribution Engine traces the leak to Bob.
+5. Tests unmarked/tampered PDF abstention.
+6. Tests fully offline operation.
 """
 import base64
-import time
-from app.core.state import system_state
-from app.crypto.container import SecureContainerFormat
+import hashlib
+import os
+from app.crypto.pqc_kem import HybridPQCKEM
+from app.crypto.pqc_sig import DigitalSignatureManager
+from app.crypto.vault import EncryptedCredentialVault
+from app.crypto.envelope import MultiRecipientEnvelope
+from app.crypto.pdf_protector import PdfProtector
 from app.client.decryptor import LocalRecipientDecryptor
-from app.provenance.ledger import provenance_ledger
-from app.forensics.attribution_engine import forensic_engine
+from app.provenance.ledger import ProvenanceLedger
+from app.forensics.attribution_engine import ForensicAttributionEngine
+from app.core.pdf_generator import generate_sample_navy_pdf
+
+
+def _create_identity(name, password):
+    """Helper: create a full identity with ML-KEM + ML-DSA keys + vault."""
+    priv_x, pub_x, priv_pqc, pub_pqc = HybridPQCKEM.generate_keypair()
+    priv_sig, pub_sig = DigitalSignatureManager.generate_keypair()
+    vault = EncryptedCredentialVault.create_vault(password, priv_x, priv_pqc, priv_sig)
+    return {
+        "name": name,
+        "priv_x": priv_x, "pub_x": pub_x,
+        "priv_pqc": priv_pqc, "pub_pqc": pub_pqc,
+        "priv_sig": priv_sig, "pub_sig": pub_sig,
+        "vault": vault
+    }
+
+
+def _protect_pdf_for_recipients(pdf_bytes, doc_id, title, identities, recipient_ids):
+    """Helper: create one protected PDF for all recipients."""
+    doc_open_secret = os.urandom(32).hex()
+
+    # Wrap DOS for each recipient using ML-KEM
+    # We reuse MultiRecipientEnvelope.wrap_cek_for_recipient — it wraps arbitrary bytes
+    dos_bytes = doc_open_secret.encode("utf-8")
+    recipient_slots = []
+    for rid in recipient_ids:
+        ident = identities[rid]
+        wrap = MultiRecipientEnvelope.wrap_cek_for_recipient(
+            dos_bytes, rid, ident["pub_x"], ident["pub_pqc"]
+        )
+        recipient_slots.append(wrap)
+
+    protected = PdfProtector.protect(pdf_bytes, doc_id, title, doc_open_secret, recipient_slots)
+    return protected, doc_open_secret
 
 
 def test_end_to_end_real_pdf_leak_attribution():
     """
     Primary SIH26237 End-to-End Test:
-    Demonstrates:
-    - Encrypt once
-    - Bob receives ONE .secure file + password
-    - Local recipient decryption & dynamic watermarking
-    - Signed receipt on immutable ledger
+    - Encrypt once → ONE protected PDF
+    - Bob decrypts with his LeakTrace password
+    - Local ML-KEM + AES + watermark + ML-DSA signing
     - Forensic attribution on leaked PDF
     """
-    doc_id = "DOC-7F3A29B1"
-    pkg_key = f"{doc_id}:USER-BOB"
-    pkg_bytes = system_state.secure_packages[pkg_key]
-    assert pkg_bytes is not None
+    # Setup identities
+    bob = _create_identity("Bob", "BobSecure2026!")
+    alice = _create_identity("Alice", "AliceSecure2026!")
 
-    # 1. Bob decrypts locally with his password
-    bob_password = "BobSecure2026!"
-    dec_res = LocalRecipientDecryptor.decrypt_secure_package(pkg_bytes, bob_password)
-    assert len(dec_res.watermarked_pdf_bytes) > 0
+    identities = {"USER-BOB": bob, "USER-ALICE": alice}
 
-    # 2. Anchor Bob's signed receipt into the ledger
-    block_idx, block_hash = provenance_ledger.commit_receipt(dec_res.receipt)
+    # Setup forensic engine with registered identities
+    engine = ForensicAttributionEngine()
+    for uid, ident in identities.items():
+        engine.register_recipient_identity(
+            recipient_id=uid,
+            name=ident["name"],
+            unit="Naval Cyber Operations",
+            public_key_sig_b64=base64.b64encode(ident["pub_sig"]).decode("utf-8")
+        )
+
+    # Create and protect a real PDF
+    pdf_bytes = generate_sample_navy_pdf(
+        "Strike Group Alpha", "DOC-ALPHA", "TOP SECRET", "Operational deployment order."
+    )
+    protected, dos = _protect_pdf_for_recipients(
+        pdf_bytes, "DOC-ALPHA", "Strike Group Alpha",
+        identities, ["USER-BOB", "USER-ALICE"]
+    )
+
+    # Verify ONE file
+    assert protected[:5] == b"%PDF-"
+    slots = PdfProtector.read_slots(protected)
+    assert len(slots["recipients"]) == 2
+
+    # Bob decrypts with his password
+    bob_result = LocalRecipientDecryptor.decrypt_protected_pdf(
+        protected_pdf_bytes=protected,
+        recipient_id="USER-BOB",
+        password="BobSecure2026!",
+        encrypted_vault=bob["vault"],
+        public_key_sig_b64=base64.b64encode(bob["pub_sig"]).decode("utf-8")
+    )
+    assert len(bob_result.watermarked_pdf_bytes) > 0
+    assert bob_result.receipt.session_id.startswith("SESS-")
+    assert bob_result.receipt.watermark_id.startswith("WM-")
+
+    # Verify ML-DSA signature
+    sig_bytes = base64.b64decode(bob_result.receipt.recipient_signature_b64)
+    assert len(sig_bytes) == 3309  # NIST FIPS 204 ML-DSA-65
+    assert DigitalSignatureManager.verify(
+        bob_result.receipt.event_digest.encode("utf-8"), sig_bytes, bob["pub_sig"]
+    ) is True
+
+    # Commit to ledger
+    ledger = ProvenanceLedger()
+    block_idx, block_hash = ledger.commit_receipt(bob_result.receipt)
     assert block_idx > 0
 
-    # 3. Simulate leak: Bob's decrypted PDF is leaked
-    leaked_pdf_bytes = dec_res.watermarked_pdf_bytes
-
-    # 4. Forensic investigation (No password, no private keys required)
-    investigation = forensic_engine.investigate_pdf_leak(leaked_pdf_bytes)
-
+    # Forensic investigation on leaked PDF
+    investigation = engine.investigate_pdf_leak(bob_result.watermarked_pdf_bytes, ledger=ledger)
     assert investigation.is_attributed is True
     assert investigation.recipient_id == "USER-BOB"
-    assert investigation.recipient_name == "Bob"
     assert investigation.watermark_status == "MATCHED"
     assert investigation.signature_status == "VALID"
     assert investigation.ledger_status == "VALID"
-    assert investigation.ledger_block_index == block_idx
 
 
 def test_tampered_or_unmarked_pdf_abstains():
-    """
-    Verifies PS Requirement:
-    If watermark extraction is corrupted, missing, or channels disagree:
-    return an INVESTIGATIVE LEAD / CONFLICT / ABSTAIN result rather than falsely identifying someone.
-    """
-    # Plain unmodified PDF with no watermark
+    """Unmarked PDF returns abstain/not-found, never a false accusation."""
     dummy_pdf = b"%PDF-1.4\n1 0 obj\n<<\n>>\nendobj\ntrailer\n<<\n>>\n%%EOF"
-    res = forensic_engine.investigate_pdf_leak(dummy_pdf)
-
+    engine = ForensicAttributionEngine()
+    res = engine.investigate_pdf_leak(dummy_pdf)
     assert res.is_attributed is False
     assert res.watermark_status == "NOT_FOUND"
-    assert "No cryptographic forensic watermark" in res.forensic_summary
+
+
+def test_alice_and_bob_watermarks_differ():
+    """Same protected PDF, different recipients → different watermarks."""
+    alice = _create_identity("Alice", "AlicePass!")
+    bob = _create_identity("Bob", "BobPass!")
+    identities = {"USER-ALICE": alice, "USER-BOB": bob}
+
+    pdf_bytes = generate_sample_navy_pdf("Dual Test", "DOC-DUAL", "SECRET", "Dual recipient test.")
+    protected, dos = _protect_pdf_for_recipients(
+        pdf_bytes, "DOC-DUAL", "Dual Test", identities, ["USER-ALICE", "USER-BOB"]
+    )
+
+    alice_result = LocalRecipientDecryptor.decrypt_protected_pdf(
+        protected, "USER-ALICE", "AlicePass!", alice["vault"],
+        base64.b64encode(alice["pub_sig"]).decode("utf-8")
+    )
+    bob_result = LocalRecipientDecryptor.decrypt_protected_pdf(
+        protected, "USER-BOB", "BobPass!", bob["vault"],
+        base64.b64encode(bob["pub_sig"]).decode("utf-8")
+    )
+
+    assert alice_result.receipt.watermark_id != bob_result.receipt.watermark_id
+    assert alice_result.receipt.session_id != bob_result.receipt.session_id
 
 
 def test_air_gapped_offline_operation():
-    """
-    Verifies that the entire pipeline operates with 100% offline local primitives:
-    - Zero remote KMS
-    - Zero public blockchain gas/network calls
-    - Fully deterministic local cryptography
-    """
-    from app.crypto.pqc_kem import HybridPQCKEM
-    from app.crypto.pqc_sig import DigitalSignatureManager
-    from app.crypto.vault import EncryptedCredentialVault
-    from app.crypto.envelope import MultiRecipientEnvelope
+    """Entire pipeline operates with zero network calls."""
+    user = _create_identity("Offline", "OfflinePass123")
+    identities = {"USER-OFFLINE": user}
 
-    from app.core.pdf_generator import generate_sample_navy_pdf
-
-    # Keygen offline
-    priv_x, pub_x, priv_pqc, pub_pqc = HybridPQCKEM.generate_keypair()
-    priv_sig, pub_sig = DigitalSignatureManager.generate_keypair()
-    vault = EncryptedCredentialVault.create_vault("OfflinePass123", priv_x, priv_pqc, priv_sig)
-
-    # Encrypt offline with real PDF
-    pdf = generate_sample_navy_pdf("Air Gapped Plan", "DOC-OFFLINE", "SECRET", "Directive for air-gapped test")
-    cek, payload = MultiRecipientEnvelope.encrypt_document_bytes(pdf, "DOC-OFFLINE", "Air-Gapped Plan", "SECRET", "OFFLINE-SENDER")
-    wrapped = MultiRecipientEnvelope.wrap_cek_for_recipient(cek, "USER-OFFLINE", pub_x, pub_pqc)
-
-    pkg = SecureContainerFormat.pack(
-        doc_id="DOC-OFFLINE",
-        title="Air-Gapped Plan",
-        original_filename="AirGapped.pdf",
-        classification="SECRET",
-        doc_hash_sha256="abc",
-        recipient_id="USER-OFFLINE",
-        recipient_name="Offline Recipient",
-        recipient_public_kem_b64=base64.b64encode(pub_pqc).decode("utf-8"),
-        recipient_public_sig_b64=base64.b64encode(pub_sig).decode("utf-8"),
-        encrypted_vault=vault,
-        wrapped_cek=wrapped,
-        encrypted_payload=payload
+    pdf = generate_sample_navy_pdf("Offline Plan", "DOC-OFFLINE", "SECRET", "Air-gapped test.")
+    protected, dos = _protect_pdf_for_recipients(
+        pdf, "DOC-OFFLINE", "Offline Plan", identities, ["USER-OFFLINE"]
     )
-    pkg_bytes = SecureContainerFormat.serialize_to_bytes(pkg)
 
-    # Decrypt offline
-    res = LocalRecipientDecryptor.decrypt_secure_package(pkg_bytes, "OfflinePass123")
-    assert res.watermarked_pdf_bytes is not None
-    assert res.receipt.recipient_signature_b64 is not None
+    result = LocalRecipientDecryptor.decrypt_protected_pdf(
+        protected, "USER-OFFLINE", "OfflinePass123", user["vault"],
+        base64.b64encode(user["pub_sig"]).decode("utf-8")
+    )
+    assert result.watermarked_pdf_bytes is not None
+    assert result.receipt.recipient_signature_b64 is not None

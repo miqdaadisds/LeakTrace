@@ -9,6 +9,9 @@ import time
 
 
 class RecipientProfile(BaseModel):
+    role: str = Field(default="recipient", description="User role")
+    approved: bool = Field(default=True, description="Account approval status")
+    recovery_key_hash: Optional[str] = Field(None, description="Recovery key hash")
     recipient_id: str = Field(..., description="Unique defence officer/user identifier, e.g. USER-BOB")
     name: str = Field(..., description="Full name or operational callsign")
     unit: str = Field(..., description="Department, Team, or Military Command")

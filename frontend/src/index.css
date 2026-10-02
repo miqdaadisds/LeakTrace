@@ -1,52 +1,85 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  * {
+    font-family: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+
   body {
-    background-color: #f8fafc;
+    background-color: #0b1120;
     background-image: 
-      radial-gradient(at 15% 15%, rgba(224, 238, 255, 0.7) 0px, transparent 50%),
-      radial-gradient(at 85% 20%, rgba(243, 232, 255, 0.6) 0px, transparent 50%),
-      radial-gradient(at 50% 80%, rgba(220, 252, 231, 0.4) 0px, transparent 50%);
+      radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.45) 0px, transparent 55%),
+      radial-gradient(at 100% 0%, rgba(245, 158, 11, 0.3) 0px, transparent 50%),
+      radial-gradient(at 50% 100%, rgba(14, 165, 233, 0.35) 0px, transparent 60%),
+      radial-gradient(at 80% 75%, rgba(99, 102, 241, 0.3) 0px, transparent 55%);
     background-attachment: fixed;
     color: #0f172a;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  input, select, textarea {
+    color: #0f172a !important;
+  }
 }
 
-/* Apple Frosted Glass Utilities */
-.apple-glass {
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 4px 10px -2px rgba(0, 0, 0, 0.02);
-}
-
-.apple-glass-card {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+/* Liquid Frosted Glass Core */
+.apple-glass, .liquid-glass {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(28px) saturate(210%);
+  -webkit-backdrop-filter: blur(28px) saturate(210%);
   border: 1px solid rgba(255, 255, 255, 0.85);
-  border-radius: 20px;
-  box-shadow: 0 12px 36px -6px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.02);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 
+    0 20px 40px -15px rgba(15, 23, 42, 0.1),
+    0 4px 12px -2px rgba(15, 23, 42, 0.04),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 1px 0 rgba(255, 255, 255, 0.3);
 }
 
-.apple-glass-card:hover {
-  box-shadow: 0 16px 44px -8px rgba(0, 0, 0, 0.07), 0 6px 16px -3px rgba(0, 0, 0, 0.03);
+.apple-glass-card, .liquid-glass-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(32px) saturate(220%);
+  -webkit-backdrop-filter: blur(32px) saturate(220%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 26px;
+  box-shadow: 
+    0 28px 56px -12px rgba(15, 23, 42, 0.14),
+    0 8px 20px -4px rgba(15, 23, 42, 0.06),
+    inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 1px 0 rgba(255, 255, 255, 0.4);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.apple-glass-subtle {
-  background: rgba(248, 250, 252, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(226, 232, 240, 0.6);
-  border-radius: 14px;
+.apple-glass-card:hover, .liquid-glass-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 
+    0 36px 68px -14px rgba(15, 23, 42, 0.18),
+    0 12px 28px -4px rgba(15, 23, 42, 0.08),
+    inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 1);
 }
+
+.apple-glass-subtle, .liquid-glass-subtle {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(20px) saturate(190%);
+  -webkit-backdrop-filter: blur(20px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 18px;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.95);
+}
+
+.liquid-pill-active {
+  background: rgba(255, 255, 255, 0.98);
+  color: #0f172a;
+  box-shadow: 
+    0 8px 18px -4px rgba(15, 23, 42, 0.12),
+    0 2px 6px -1px rgba(15, 23, 42, 0.06),
+    inset 0 1px 1px rgba(255, 255, 255, 1);
+}
+
 
 /* Minimalist scrollbar */
 ::-webkit-scrollbar {

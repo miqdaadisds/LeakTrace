@@ -1,14 +1,20 @@
 {
-  "name": "wesee-provenance-ui",
-  "private": true,
+  "name": "leaktrace",
+  "productName": "LeakTrace",
   "version": "1.0.0",
+  "description": "LeakTrace - Cryptographic Attribution & Immutable Decryption Provenance for Encrypted Document Distribution",
+  "author": "Ministry of Defence / WESEE (SIH 2026)",
   "main": "electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "app": "electron electron/main.cjs"
+    "app": "electron electron/main.cjs",
+    "electron:start": "electron electron/main.cjs",
+    "dist": "electron-builder --win nsis msi",
+    "dist:msi": "electron-builder --win msi",
+    "dist:nsis": "electron-builder --win nsis"
   },
   "dependencies": {
     "axios": "1.7.9",
@@ -22,8 +28,58 @@
     "@vitejs/plugin-react": "4.3.4",
     "autoprefixer": "10.4.20",
     "electron": "44.5.1",
+    "electron-builder": "^26.15.3",
     "postcss": "8.5.1",
     "tailwindcss": "3.4.17",
     "vite": "6.1.0"
+  },
+  "build": {
+    "appId": "in.gov.defence.wesee.leaktrace",
+    "productName": "LeakTrace",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/dist/leaktrace-backend",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "icon": "electron/icon.ico",
+      "target": [
+        {
+          "target": "msi",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "msi": {
+      "oneClick": false,
+      "shortcutName": "LeakTrace"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LeakTrace"
+    }
   }
 }

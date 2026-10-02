@@ -1,0 +1,6 @@
+packages/*.msi filter=lfs diff=lfs merge=lfs -text
+packages/*.exe filter=lfs diff=lfs merge=lfs -text
+installers/*.msi filter=lfs diff=lfs merge=lfs -text
+installers/*.exe filter=lfs diff=lfs merge=lfs -text
+*.msi filter=lfs diff=lfs merge=lfs -text
+
