@@ -7,11 +7,12 @@ const http = require('http');
 const fs = require('fs');
 
 // Persistent UserData in production, isolated temporary path in dev
+let userDataDir = null;
 if (!app.isPackaged) {
-  const userDataDir = path.join(os.tmpdir(), `leaktrace-electron-${process.pid}`);
+  userDataDir = path.join(os.tmpdir(), `leaktrace-electron-${process.pid}`);
   app.setPath('userData', userDataDir);
 } else {
-  const userDataDir = path.join(app.getPath('appData'), 'LeakTrace');
+  userDataDir = path.join(app.getPath('appData'), 'LeakTrace');
   try { fs.mkdirSync(userDataDir, { recursive: true }); } catch (_) {}
   app.setPath('userData', userDataDir);
 }
@@ -247,9 +248,8 @@ app.whenReady().then(async () => {
   }
 });
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
+app.on('activate', () => {
+  if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
 app.on('window-all-closed', () => {
