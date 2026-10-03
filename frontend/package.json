@@ -1,7 +1,7 @@
 {
   "name": "leaktrace",
   "productName": "LeakTrace",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "LeakTrace - Cryptographic Attribution & Immutable Decryption Provenance for Encrypted Document Distribution",
   "author": "Ministry of Defence / WESEE (SIH 2026)",
   "main": "electron/main.cjs",
