@@ -181,8 +181,10 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  const remoteApiUrl = process.env.LEAKTRACE_API_URL || null;
-  const isRemoteMode = remoteApiUrl && !remoteApiUrl.includes('127.0.0.1') && !remoteApiUrl.includes('localhost');
+  const CENTRAL_DEFAULT_URL = 'https://leaktrace-backend.onrender.com';
+  const isOfflineForced = process.env.LEAKTRACE_OFFLINE === '1' || process.env.LEAKTRACE_API_URL === 'offline';
+  const remoteApiUrl = isOfflineForced ? null : (process.env.LEAKTRACE_API_URL || CENTRAL_DEFAULT_URL);
+  const isRemoteMode = Boolean(remoteApiUrl && !remoteApiUrl.includes('127.0.0.1') && !remoteApiUrl.includes('localhost'));
 
   // Block external navigation away from authorized enclaves
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
@@ -211,8 +213,10 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  const remoteApiUrl = process.env.LEAKTRACE_API_URL || null;
-  const isRemoteMode = remoteApiUrl && !remoteApiUrl.includes('127.0.0.1') && !remoteApiUrl.includes('localhost');
+  const CENTRAL_DEFAULT_URL = 'https://leaktrace-backend.onrender.com';
+  const isOfflineForced = process.env.LEAKTRACE_OFFLINE === '1' || process.env.LEAKTRACE_API_URL === 'offline';
+  const remoteApiUrl = isOfflineForced ? null : (process.env.LEAKTRACE_API_URL || CENTRAL_DEFAULT_URL);
+  const isRemoteMode = Boolean(remoteApiUrl && !remoteApiUrl.includes('127.0.0.1') && !remoteApiUrl.includes('localhost'));
 
   if (isRemoteMode) {
     console.log(`[LeakTrace] Connected Mode: Active Central Backend configured at ${remoteApiUrl}`);

@@ -11,7 +11,7 @@ import {
   ArrowRight, 
   RefreshCw 
 } from 'lucide-react';
-import { protectDocument } from '../api';
+import { protectDocument, getApiBaseUrl } from '../api';
 import axios from 'axios';
 
 export default function DocumentPublisher({ identities, activeDocs, onDocumentPublished, onGoToDecrypt }) {
@@ -65,7 +65,7 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
 
   const downloadFile = async (docId, title) => {
     try {
-      const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/distribution/download/${docId}`, {
+      const res = await axios.get(`${getApiBaseUrl()}/api/distribution/download/${docId}`, {
         responseType: 'blob',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}` // assuming token is somewhere, actually we should use api.downloadProtectedDocument
@@ -211,7 +211,7 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
 
               <div className="space-y-2">
                 <a
-                  href={`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/distribution/download/${distributionResult.doc_id}`}
+                  href={`${getApiBaseUrl()}/api/distribution/download/${distributionResult.doc_id}`}
                   className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md"
                 >
                   <Download className="w-4 h-4" />
@@ -252,7 +252,7 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
 
                   <div className="space-y-1.5 pt-1">
                     <a
-                      href={`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/distribution/download/${doc.doc_id}`}
+                      href={`${getApiBaseUrl()}/api/distribution/download/${doc.doc_id}`}
                       className="w-full py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 flex items-center justify-center space-x-1"
                     >
                       <Download className="w-3 h-3 text-blue-600" />

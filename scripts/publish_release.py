@@ -20,20 +20,21 @@ def publish():
         sys.exit(1)
         
     repo = "miqdaadisds/LeakTrace"
-    tag = "v1.0.0"
-    title = "LeakTrace v1.0.0 — Standalone MSI & Desktop Enclave"
+    tag = "v1.1"
+    title = "LeakTrace v1.1.0 — Connected Multi-Client Cloud Release"
     body = (
-        "## LeakTrace v1.0.0: Cryptographic Attribution & Provenance Enclave\n\n"
-        "Official Release for SIH 2026 Problem Statement No. 237 (ID: 26237) — Ministry of Defence / WESEE.\n\n"
-        "### Key Highlights:\n"
-        "- **100% Self-Contained Standalone App:** Zero runtime prerequisites on target systems (no Python, Node.js, Git, or pip needed).\n"
-        "- **Pre-Configured Administrator Enclave:** Organization Master Administrator (`Miqdaad Sayyed`, WESEE Naval Directorate) pre-seeded and locked.\n"
-        "- **Seamless First-Launch:** Opens directly to the Sign In interface; friends and officers can register individual recipient accounts without accessing administrative configuration.\n"
-        "- **Post-Quantum Cryptography:** NIST FIPS 203 ML-KEM-768 hybrid envelope distribution and NIST FIPS 204 ML-DSA-65 non-repudiation signing.\n"
-        "- **4-Node Permissioned Quorum:** Local DLT notary ledger tracking recipient decryption receipts.\n\n"
+        "## LeakTrace v1.1.0: Connected Multi-Client Cryptographic Enclave\n\n"
+        "Official Connected Cloud Release for SIH 2026 Problem Statement No. 237 (ID: 26237) — Ministry of Defence / WESEE.\n\n"
+        "### Key Highlights in v1.1.0:\n"
+        "- **Connected Multi-Client Architecture:** Enables real-time coordination across devices anywhere via central FastAPI backend on Render (`https://leaktrace-backend.onrender.com`) and centralized PostgreSQL on Supabase.\n"
+        "- **Client Cryptographic Sovereignty:** Private keys (NIST FIPS 203 ML-KEM-768, NIST FIPS 204 ML-DSA-65) and Argon2id credential vaults remain exclusively on local workstations. Central cloud stores only public keys.\n"
+        "- **Zero-Password Challenge Login:** Authentication uses cryptographic challenge nonces signed locally with ML-DSA-65 signatures. Passwords never traverse the network.\n"
+        "- **Single Shared Protected PDF:** O(1) single shared AES-256 encrypted PDF with recipient KEM slots. All authorized users download the identical binary file.\n"
+        "- **Dynamic Forensic Watermarking:** Imperceptible watermarks injected on local decryption; decryption events generate non-repudiable ML-DSA-65 receipts anchored to the permissioned blockchain ledger.\n"
+        "- **Full Air-Gapped Dual-Mode:** Offline SQLite mode remains fully functional for air-gapped environments.\n\n"
         "### Installer Downloads:\n"
-        "- **`LeakTrace 1.0.0.msi`**: Official Microsoft Windows Installer (181 MB)\n"
-        "- **`LeakTrace Setup 1.0.0.exe`**: Standalone Setup Wizard with desktop & start menu shortcuts (169 MB)\n"
+        "- **`LeakTrace 1.1.0.msi`**: Official Microsoft Windows Installer Package (181 MB)\n"
+        "- **`LeakTrace Setup 1.1.0.exe`**: Standalone Windows Setup Wizard with Desktop & Start Menu Shortcuts (169 MB)\n"
     )
     
     # 1. Create or get existing release
@@ -82,8 +83,8 @@ def publish():
     
     # 2. Upload assets
     assets = [
-        ("LeakTrace-1.0.0.msi", os.path.abspath("packages/LeakTrace 1.0.0.msi"), "application/x-msi"),
-        ("LeakTrace-Setup-1.0.0.exe", os.path.abspath("packages/LeakTrace Setup 1.0.0.exe"), "application/vnd.microsoft.portable-executable")
+        ("LeakTrace 1.1.0.msi", os.path.abspath("releases/LeakTrace 1.1.0.msi"), "application/x-msi"),
+        ("LeakTrace Setup 1.1.0.exe", os.path.abspath("releases/LeakTrace Setup 1.1.0.exe"), "application/vnd.microsoft.portable-executable")
     ]
     
     existing_asset_names = [a['name'] for a in release.get('assets', [])]

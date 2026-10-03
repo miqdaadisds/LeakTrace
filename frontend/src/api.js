@@ -1,11 +1,29 @@
 import axios from 'axios';
 
-// Detect active backend endpoint (Environment variable, runtime override, or local fallback)
-const defaultUrl = 
-  (typeof window !== 'undefined' && window.__LEAKTRACE_API_URL__) ||
-  (typeof window !== 'undefined' && localStorage.getItem('leaktrace_api_url')) ||
-  import.meta.env.VITE_API_URL || 
-  'http://127.0.0.1:8000';
+// Detect active backend endpoint (Electron preload, runtime override, environment variable, or central cloud default)
+export const CENTRAL_DEFAULT_BACKEND = 'https://leaktrace-backend.onrender.com';
+
+function resolveDefaultApiUrl() {
+  if (typeof window !== 'undefined' && window.electronAPI?.apiUrl) {
+    return window.electronAPI.apiUrl;
+  }
+  if (typeof window !== 'undefined' && window.__LEAKTRACE_API_URL__) {
+    return window.__LEAKTRACE_API_URL__;
+  }
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('leaktrace_api_url');
+    // If saved is an obsolete local url, ignore it unless forced offline
+    if (saved && !saved.includes('127.0.0.1') && !saved.includes('localhost')) {
+      return saved;
+    }
+  }
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  return CENTRAL_DEFAULT_BACKEND;
+}
+
+const defaultUrl = resolveDefaultApiUrl();
 
 const api = axios.create({
   baseURL: defaultUrl,
