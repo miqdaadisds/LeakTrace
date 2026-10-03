@@ -31,7 +31,7 @@ class TextLeakRequest(BaseModel):
 
 class ExportReportRequest(BaseModel):
     watermark_id: str = Field(..., description="Watermark ID of attributed document")
-    format: Optional[str] = Field("pdf", description="'pdf' for downloadable PDF report, 'json' for raw evidence dict")
+    format: Optional[str] = Field("json", description="'pdf' for downloadable PDF report, 'json' for raw evidence dict")
 
 
 @router.post("/analyze-pdf", response_model=ForensicAttributionResult)
@@ -82,13 +82,18 @@ async def export_report(
     Returns genuine official PDF by default (or JSON if requested).
     """
     target_wm = ""
-    req_format = format or "pdf"
+    if isinstance(watermark_id, ExportReportRequest):
+        req = watermark_id
+        watermark_id = None
+
+    req_format = "json" if req else (format or "pdf")
     if req and req.watermark_id:
         target_wm = req.watermark_id.strip()
         if req.format:
             req_format = req.format
     elif watermark_id:
-        target_wm = watermark_id.strip()
+        target_wm = str(watermark_id).strip()
+        req_format = format or "pdf"
 
     if not target_wm:
         raise HTTPException(status_code=400, detail="Must provide a valid watermark_id.")

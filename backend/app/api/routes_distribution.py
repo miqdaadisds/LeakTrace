@@ -11,13 +11,15 @@ import hashlib
 import os
 import uuid
 import base64
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Response, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Response, Depends, Request
 
 from app.core.state import system_state
 from app.core.pdf_generator import generate_sample_navy_pdf
 from app.crypto.envelope import MultiRecipientEnvelope
 from app.crypto.pdf_protector import PdfProtector
 from app.auth import middleware
+from app.core.events import event_broker
+from app.db.storage import document_storage
 
 router = APIRouter(prefix="/api/distribution", tags=["Document Distribution"])
 
@@ -145,6 +147,8 @@ async def protect_document(
     }
     _protected_pdfs[doc_id] = protected_pdf
 
+    storage_ref = await document_storage.upload_protected_pdf(doc_id, protected_pdf)
+
     if middleware.db:
         try:
             import json, time
@@ -155,10 +159,22 @@ async def protect_document(
                 recipient_ids_json=json.dumps(rcpt_list),
                 doc_hash=doc_hash,
                 protected_pdf=protected_pdf,
-                created_at=time.time()
+                created_at=time.time(),
+                storage_ref=storage_ref
             )
         except Exception:
             pass
+
+    event_broker.publish("DOCUMENT_AUTHORIZED", {
+        "doc_id": doc_id,
+        "title": title,
+        "authorized_recipients": rcpt_list
+    })
+    event_broker.publish("DOCUMENT_AVAILABLE", {
+        "doc_id": doc_id,
+        "title": title,
+        "download_url": f"/api/distribution/download/{doc_id}"
+    })
 
     return {
         "status": "SUCCESS",
@@ -175,7 +191,7 @@ async def protect_document(
 
 
 @router.get("/download/{doc_id}")
-def download_protected_pdf(doc_id: str):
+async def download_protected_pdf(doc_id: str):
     """
     Downloads the protected PDF. Same file for every recipient.
     """
@@ -184,7 +200,12 @@ def download_protected_pdf(doc_id: str):
     if not pdf_bytes and middleware.db:
         doc_row = middleware.db.get_protected_document(doc_id)
         if doc_row:
-            pdf_bytes = doc_row["protected_pdf"]
+            if doc_row.get("storage_ref"):
+                remote_bytes = await document_storage.download_protected_pdf(doc_row["storage_ref"])
+                if remote_bytes:
+                    pdf_bytes = remote_bytes
+            if not pdf_bytes:
+                pdf_bytes = doc_row.get("protected_pdf")
             filename = f"{doc_row['title'].replace(' ', '_')}.pdf"
 
     if not pdf_bytes:

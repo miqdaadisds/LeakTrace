@@ -1,94 +1,258 @@
 import axios from 'axios';
 
+// Detect active backend endpoint (Environment variable, runtime override, or local fallback)
+const defaultUrl = 
+  (typeof window !== 'undefined' && window.__LEAKTRACE_API_URL__) ||
+  (typeof window !== 'undefined' && localStorage.getItem('leaktrace_api_url')) ||
+  import.meta.env.VITE_API_URL || 
+  'http://127.0.0.1:8000';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000',
+  baseURL: defaultUrl,
+  timeout: 30000,
 });
 
-let authToken = typeof window !== 'undefined' ? localStorage.getItem('leaktrace_auth_token') : null;
+export function getApiBaseUrl() {
+  return api.defaults.baseURL;
+}
 
-export function setAuthToken(token) { 
-  authToken = token; 
-  if (typeof window !== 'undefined') {
-    if (token) localStorage.setItem('leaktrace_auth_token', token);
-    else localStorage.removeItem('leaktrace_auth_token');
+export function setApiBaseUrl(url) {
+  if (url) {
+    const cleanUrl = url.trim().replace(/\/+$/, '');
+    api.defaults.baseURL = cleanUrl;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('leaktrace_api_url', cleanUrl);
+    }
   }
 }
+
+// Security Boundary: Session token held strictly in-memory per security specification
+let inMemoryToken = null;
+
+export function setAuthToken(token) { 
+  inMemoryToken = token; 
+}
+
+export function getAuthToken() {
+  return inMemoryToken;
+}
+
 export function clearAuthToken() { 
-  authToken = null; 
-  if (typeof window !== 'undefined') {
-    localStorage.removeItem('leaktrace_auth_token');
-  }
+  inMemoryToken = null; 
 }
 
 function authHeaders() {
   const headers = {};
-  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  if (inMemoryToken) headers['Authorization'] = `Bearer ${inMemoryToken}`;
   return headers;
 }
 
-// Auth API
+// ==========================================
+// 1. HEALTH & COLD-START RECOVERY
+// ==========================================
+export const checkHealthWithRetry = async (maxAttempts = 15, intervalMs = 2000) => {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await api.get('/health', { timeout: 5000 });
+      if (res.status === 200) {
+        return { online: true, data: res.data };
+      }
+    } catch (err) {
+      if (attempt === maxAttempts) {
+        return { online: false, error: err.message };
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  }
+  return { online: false };
+};
+
+// ==========================================
+// 2. AUTHENTICATION & ZERO-PASSWORD LOGIN
+// ==========================================
 export const checkAuthStatus = async () => {
   const res = await api.get('/api/auth/status', { headers: authHeaders() });
   return res.data;
 };
+
 export const setupOrganization = async (name, unit, password) => {
   const res = await api.post('/api/auth/setup', { name, unit, password });
+  if (res.data?.token) setAuthToken(res.data.token);
   return res.data;
 };
+
+// Classical/Offline password registration & login fallback
 export const register = async (name, unit, password) => {
   const res = await api.post('/api/auth/register', { name, unit, password });
   return res.data;
 };
+
 export const login = async (recipientId, password) => {
   const res = await api.post('/api/auth/login', { recipient_id: recipientId, password });
+  if (res.data?.token) setAuthToken(res.data.token);
   return res.data;
 };
+
+// Connected Sovereign Public Registration
+export const registerPublic = async ({ recipient_id, name, unit, public_key_kem_b64, public_key_sig_b64, fingerprint }) => {
+  const res = await api.post('/api/auth/register-public', {
+    recipient_id,
+    name,
+    unit: unit || '',
+    public_key_kem_b64,
+    public_key_sig_b64,
+    fingerprint: fingerprint || ''
+  });
+  return res.data;
+};
+
+// Connected Zero-Password Challenge-Response Login Flow
+export const requestAuthChallenge = async (recipientId) => {
+  const res = await api.post('/api/auth/challenge', { recipient_id: recipientId });
+  return res.data;
+};
+
+export const submitAuthChallenge = async (recipientId, challengeId, signatureB64) => {
+  const res = await api.post('/api/auth/login-challenge', {
+    recipient_id: recipientId,
+    challenge_id: challengeId,
+    signature_b64: signatureB64
+  });
+  if (res.data?.token) {
+    setAuthToken(res.data.token);
+  }
+  return res.data;
+};
+
 export const logout = async () => {
-  const res = await api.post('/api/auth/logout', {}, { headers: authHeaders() });
-  return res.data;
+  try {
+    await api.post('/api/auth/logout', {}, { headers: authHeaders() });
+  } finally {
+    clearAuthToken();
+  }
+  return { status: 'ok' };
 };
+
 export const getCurrentUser = async () => {
   const res = await api.get('/api/auth/me', { headers: authHeaders() });
   return res.data;
 };
+
 export const recoverPassword = async (recipientId, recoveryKey, newPassword) => {
-  const res = await api.post('/api/auth/recover-password', { recipient_id: recipientId, recovery_key: recoveryKey, new_password: newPassword });
+  const res = await api.post('/api/auth/recover-password', {
+    recipient_id: recipientId,
+    recovery_key: recoveryKey,
+    new_password: newPassword
+  });
   return res.data;
 };
+
 export const approveUser = async (recipientId) => {
   const res = await api.post('/api/auth/approve', { recipient_id: recipientId }, { headers: authHeaders() });
   return res.data;
 };
+
 export const assignRole = async (recipientId, role) => {
   const res = await api.post('/api/auth/assign-role', { recipient_id: recipientId, role }, { headers: authHeaders() });
   return res.data;
 };
+
+// ==========================================
+// 3. REALTIME EVENTS (SSE & POLLING FALLBACK)
+// ==========================================
+export function subscribeToRealtimeEvents(onEvent, onError) {
+  const baseURL = api.defaults.baseURL;
+  const sseUrl = `${baseURL}/api/events`;
+  let eventSource = null;
+  let pollInterval = null;
+  let lastTimestamp = Date.now() / 1000;
+
+  try {
+    eventSource = new EventSource(sseUrl);
+    
+    const handleMessage = (e) => {
+      try {
+        const parsed = JSON.parse(e.data);
+        if (parsed.timestamp) lastTimestamp = parsed.timestamp;
+        onEvent(parsed);
+      } catch (_) {}
+    };
+
+    eventSource.onopen = () => {
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+    };
+
+    eventSource.onmessage = handleMessage;
+    eventSource.addEventListener('USER_REGISTERED', handleMessage);
+    eventSource.addEventListener('USER_APPROVED', handleMessage);
+    eventSource.addEventListener('ROLE_CHANGED', handleMessage);
+    eventSource.addEventListener('DOCUMENT_AUTHORIZED', handleMessage);
+    eventSource.addEventListener('DOCUMENT_AVAILABLE', handleMessage);
+    eventSource.addEventListener('PROVENANCE_COMMITTED', handleMessage);
+    eventSource.addEventListener('IDENTITY_REVOKED', handleMessage);
+
+    eventSource.onerror = (err) => {
+      if (onError) onError(err);
+      if (!pollInterval) {
+        pollInterval = setInterval(async () => {
+          try {
+            const res = await api.get(`/api/events/poll?since=${lastTimestamp}`);
+            if (res.data?.events) {
+              for (const ev of res.data.events) {
+                if (ev.timestamp > lastTimestamp) lastTimestamp = ev.timestamp;
+                onEvent(ev);
+              }
+            }
+          } catch (_) {}
+        }, 3000);
+      }
+    };
+  } catch (err) {
+    pollInterval = setInterval(async () => {
+      try {
+        const res = await api.get(`/api/events/poll?since=${lastTimestamp}`);
+        if (res.data?.events) {
+          for (const ev of res.data.events) {
+            if (ev.timestamp > lastTimestamp) lastTimestamp = ev.timestamp;
+            onEvent(ev);
+          }
+        }
+      } catch (_) {}
+    }, 3000);
+  }
+
+  return () => {
+    if (eventSource) eventSource.close();
+    if (pollInterval) clearInterval(pollInterval);
+  };
+}
+
+// ==========================================
+// 4. DOCUMENT DISTRIBUTION
+// ==========================================
 export const protectDocument = async (formData) => {
   const res = await api.post('/api/distribution/protect', formData, {
     headers: { 'Content-Type': 'multipart/form-data', ...authHeaders() },
   });
   return res.data;
 };
+
 export const downloadProtectedDocument = async (docId) => {
-  const res = await api.get(`/api/distribution/download/${docId}`, { headers: authHeaders(), responseType: 'blob' });
+  const res = await api.get(`/api/distribution/download/${docId}`, {
+    headers: authHeaders(),
+    responseType: 'blob'
+  });
   return res.data;
 };
+
 export const listProtectedDocuments = async () => {
   const res = await api.get('/api/distribution/documents', { headers: authHeaders() });
   return res.data;
 };
-export const exportEvidence = async (watermarkId) => {
-  const res = await api.post('/api/forensics/export-report', { watermark_id: watermarkId }, { headers: authHeaders(), responseType: 'blob' });
-  return res.data;
-};
 
-// System Status
-export const fetchSystemStatus = async () => {
-  const res = await api.get('/api/system/status', { headers: authHeaders() });
-  return res.data;
-};
-
-// 1. DISTRIBUTE
 export const fetchActiveDocuments = async () => {
   const res = await api.get('/api/distribution/documents', { headers: authHeaders() });
   return res.data;
@@ -105,10 +269,24 @@ export const getSecurePackageDownloadUrl = (docId, recipientId) => {
   return `${api.defaults.baseURL}/api/distribution/download-package/${docId}/${recipientId}`;
 };
 
-// 2. MY DOCUMENTS & LOCAL RECIPIENT CLIENT
+// ==========================================
+// 5. RECIPIENT CLIENT & PROVENANCE
+// ==========================================
+export const fetchMyAuthorizedDocuments = async () => {
+  const res = await api.get('/api/recipient/my-documents', { headers: authHeaders() });
+  return res.data;
+};
+
 export const decryptSecurePackage = async (formData) => {
   const res = await api.post('/api/recipient/decrypt', formData, {
     headers: { 'Content-Type': 'multipart/form-data', ...authHeaders() },
+  });
+  return res.data;
+};
+
+export const submitProvenanceReceipt = async (receiptData) => {
+  const res = await api.post('/api/recipient/submit-provenance-receipt', receiptData, {
+    headers: authHeaders()
   });
   return res.data;
 };
@@ -130,7 +308,9 @@ export const importProvenanceReceiptFile = async (receiptFile) => {
   return res.data;
 };
 
-// 3. PEOPLE / IDENTITIES
+// ==========================================
+// 6. IDENTITIES & DIRECTORY
+// ==========================================
 export const fetchIdentities = async () => {
   const res = await api.get('/api/identities', { headers: authHeaders() });
   return res.data;
@@ -150,7 +330,9 @@ export const getRecipientVaultUrl = (recipientId) => {
   return `${api.defaults.baseURL}/api/identities/${recipientId}/vault`;
 };
 
-// 4. FORENSICS LAB
+// ==========================================
+// 7. FORENSICS LAB
+// ==========================================
 export const analyzePdfLeak = async (file) => {
   const formData = new FormData();
   formData.append('file', file);
@@ -165,7 +347,17 @@ export const analyzeTextLeak = async (leakedText) => {
   return res.data;
 };
 
-// 5. PROVENANCE & 4-VALIDATOR DLT
+export const exportEvidence = async (watermarkId) => {
+  const res = await api.post('/api/forensics/export-report', { watermark_id: watermarkId, format: 'pdf' }, {
+    headers: authHeaders(),
+    responseType: 'blob'
+  });
+  return res.data;
+};
+
+// ==========================================
+// 8. PROVENANCE & 4-VALIDATOR DLT
+// ==========================================
 export const fetchLedgerBlocks = async () => {
   const res = await api.get('/api/ledger/blocks', { headers: authHeaders() });
   return res.data;
@@ -181,7 +373,9 @@ export const fetchValidators = async () => {
   return res.data;
 };
 
-// 6. SECURITY CONSOLE & REVOCATION
+// ==========================================
+// 9. SECURITY CONSOLE & REVOCATION
+// ==========================================
 export const fetchSecurityStatus = async () => {
   const res = await api.get('/api/security/status', { headers: authHeaders() });
   return res.data;
@@ -228,5 +422,10 @@ export const restoreLedgerState = async (blockIndex = 1, originalRecipient = 'US
     block_index: blockIndex,
     original_recipient: originalRecipient,
   }, { headers: authHeaders() });
+  return res.data;
+};
+
+export const fetchSystemStatus = async () => {
+  const res = await api.get('/api/system/status', { headers: authHeaders() });
   return res.data;
 };

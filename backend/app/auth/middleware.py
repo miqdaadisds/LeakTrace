@@ -11,7 +11,7 @@ db = None  # To be set by main.py
 def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)):
     if not db:
         raise HTTPException(status_code=500, detail="Database not initialized")
-    if not credentials:
+    if not credentials or not hasattr(credentials, "credentials"):
         raise HTTPException(status_code=401, detail="Authentication token required")
     token = credentials.credentials
     user_info = validate_session(db, token)

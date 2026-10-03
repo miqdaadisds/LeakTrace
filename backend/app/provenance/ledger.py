@@ -37,12 +37,16 @@ class ProvenanceLedger:
 
     def set_db(self, database):
         self._db = database
-        if self._db and self._db.block_count() > 0:
+        if self._db:
             self._chain = []
             self._receipt_by_watermark_id = {}
             self._doc_receipts = {}
-            self._create_genesis_block()
-            self._load_from_db()
+            if self._db.block_count() > 0:
+                self._load_from_db()
+                if not any(b.block_index == 0 for b in self._chain):
+                    self._create_genesis_block()
+            else:
+                self._create_genesis_block()
         elif not self._chain:
             self._create_genesis_block()
 
@@ -318,6 +322,9 @@ class ProvenanceLedger:
 
     def get_chain(self) -> List[ProvenanceBlock]:
         return self._chain
+
+    def block_count(self) -> int:
+        return len(self._chain)
 
 
 provenance_ledger = ProvenanceLedger()

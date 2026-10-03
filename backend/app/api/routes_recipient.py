@@ -27,8 +27,10 @@ from app.api.routes_distribution import _protected_pdfs
 
 try:
     from app.auth import middleware
+    from app.core.events import event_broker
 except ImportError:
     from backend.app.auth import middleware
+    from backend.app.core.events import event_broker
 
 router = APIRouter(prefix="/api/recipient", tags=["Recipient Workstation"])
 
@@ -167,6 +169,16 @@ async def decrypt_package_endpoint(
         block_idx = len(provenance_ledger._chain)
         block_hash = "COMMITTED-LOCALLY"
 
+    event_broker.publish("PROVENANCE_COMMITTED", {
+        "receipt_id": dec_res.receipt.receipt_id,
+        "doc_id": dec_res.receipt.doc_id,
+        "recipient_id": dec_res.receipt.recipient_id,
+        "watermark_id": dec_res.receipt.watermark_id,
+        "block_index": block_idx,
+        "block_hash": block_hash,
+        "timestamp": dec_res.receipt.timestamp
+    })
+
     # 8. Store in local session cache
     cache_key = f"{dec_res.receipt.doc_id}:{dec_res.receipt.recipient_id}"
     _latest_watermarked_pdfs[cache_key] = dec_res.watermarked_pdf_bytes
@@ -286,9 +298,58 @@ def submit_remote_provenance_receipt(receipt: DecryptionProvenanceReceipt):
 
     block_idx, block_hash = provenance_ledger.commit_receipt(receipt)
     system_state.offline_receipt_store[receipt.receipt_id] = receipt
+
+    event_broker.publish("PROVENANCE_COMMITTED", {
+        "receipt_id": receipt.receipt_id,
+        "doc_id": receipt.doc_id,
+        "recipient_id": receipt.recipient_id,
+        "watermark_id": receipt.watermark_id,
+        "block_index": block_idx,
+        "block_hash": block_hash,
+        "timestamp": receipt.timestamp
+    })
+
     return {
         "status": "RECEIPT_ANCHORED",
         "block_index": block_idx,
         "block_hash": block_hash,
         "receipt_id": receipt.receipt_id
     }
+
+
+@router.get("/my-documents")
+def list_my_documents(request: Request):
+    """
+    Returns only documents authorized for the authenticated recipient.
+    Authorization is computed strictly server-side from session token.
+    """
+    auth_header = request.headers.get("Authorization", "")
+    recipient_id = None
+    if auth_header.startswith("Bearer ") and middleware.db:
+        token = auth_header[7:].strip()
+        session = middleware.db.get_session(token)
+        if session:
+            recipient_id = session["user_id"]
+
+    if not recipient_id:
+        raise HTTPException(status_code=401, detail="Authentication token required.")
+
+    if not middleware.db:
+        return []
+
+    docs = middleware.db.list_documents_for_recipient(recipient_id)
+    results = []
+    for d in docs:
+        rcpt_ids = json.loads(d["recipient_ids_json"]) if isinstance(d["recipient_ids_json"], str) else []
+        results.append({
+            "doc_id": d["doc_id"],
+            "title": d["title"],
+            "sender_id": d["sender_id"],
+            "classification": "CONFIDENTIAL // RESTRICTED",
+            "original_filename": f"{d['doc_id']}.pdf",
+            "doc_hash_sha256": d["doc_hash"],
+            "authorized_recipients": rcpt_ids,
+            "created_at": d.get("created_at"),
+            "download_url": f"/api/distribution/download/{d['doc_id']}"
+        })
+    return results

@@ -2,7 +2,7 @@ import React from 'react';
 import { Shield, Unlock, Search, Settings, LogOut, User, Lock, Database, ShieldAlert, Key } from 'lucide-react';
 import logo from '../assets/logo.png';
 
-export default function Header({ activeTab, setActiveTab, showAdmin, setShowAdmin, user, onLogout }) {
+export default function Header({ activeTab, setActiveTab, showAdmin, setShowAdmin, user, onLogout, connectionStatus = 'connected' }) {
   const role = user?.role || 'recipient';
   const isAdmin = role === 'admin';
   const isSender = role === 'sender' || isAdmin;
@@ -17,6 +17,24 @@ export default function Header({ activeTab, setActiveTab, showAdmin, setShowAdmi
           <div className="flex items-center space-x-2">
             <span className="text-base font-extrabold text-slate-900 tracking-tight">LeakTrace</span>
             <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-white/70 text-slate-700 border border-white/80 shadow-xs">SIH26237</span>
+            {connectionStatus === 'connected' && (
+              <span className="flex items-center space-x-1 px-2 py-0.5 text-[9px] font-bold rounded-full bg-emerald-100/90 text-emerald-800 border border-emerald-300 shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Connected</span>
+              </span>
+            )}
+            {connectionStatus === 'connecting' && (
+              <span className="flex items-center space-x-1 px-2 py-0.5 text-[9px] font-bold rounded-full bg-amber-100/90 text-amber-800 border border-amber-300 shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                <span>Connecting...</span>
+              </span>
+            )}
+            {connectionStatus === 'offline' && (
+              <span className="flex items-center space-x-1 px-2 py-0.5 text-[9px] font-bold rounded-full bg-slate-200/90 text-slate-700 border border-slate-300 shadow-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                <span>Offline</span>
+              </span>
+            )}
           </div>
         </div>
 

@@ -1,368 +1,196 @@
-import sqlite3
 import os
-import json
-import time
+from typing import Optional, List, Dict, Any
+from app.db.base_repo import BaseRepository
+from app.db.sqlite_repo import SQLiteRepository
 
-class Database:
-    def __init__(self, db_path=None):
-        if db_path is None:
-            self.db_path = os.environ.get('LEAKTRACE_DB', 'leaktrace.db')
-        else:
-            self.db_path = db_path
-        # Need to ensure thread safety when using connection, 
-        # so we'll open a connection per request or method, or use check_same_thread=False
+class Database(BaseRepository):
+    """
+    Unified Database abstraction for LeakTrace.
+    Provides complete backward compatibility with existing tests and modules.
+    Automatically routes to PostgresRepository when DATABASE_URL is set,
+    or SQLiteRepository for offline / test fixtures.
+    """
+    def __init__(self, db_path=None, database_url=None):
+        self.db_path = db_path
+        self.database_url = database_url or os.environ.get("DATABASE_URL")
         
+        # If an explicit SQLite path is passed (e.g. In pytest tmp_path), always use SQLite
+        if db_path is not None:
+            self._impl = SQLiteRepository(db_path=db_path)
+        elif self.database_url:
+            from app.db.postgres_repo import PostgresRepository
+            self._impl = PostgresRepository(database_url=self.database_url)
+        else:
+            self._impl = SQLiteRepository(db_path=os.environ.get('LEAKTRACE_DB', 'leaktrace.db'))
+
     def _get_connection(self):
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute('PRAGMA journal_mode=WAL')
-        return conn
+        return self._impl._get_connection()
 
-    def initialize(self):
-        conn = self._get_connection()
-        try:
-            conn.executescript("""
-                CREATE TABLE IF NOT EXISTS identities (
-                    recipient_id TEXT PRIMARY KEY,
-                    name TEXT NOT NULL,
-                    unit TEXT DEFAULT '',
-                    role TEXT NOT NULL DEFAULT 'pending',
-                    encrypted_vault BLOB NOT NULL,
-                    public_key_kem BLOB NOT NULL,
-                    public_key_sig BLOB NOT NULL,
-                    recovery_key_hash TEXT NOT NULL,
-                    fingerprint TEXT DEFAULT '',
-                    created_at REAL NOT NULL,
-                    is_revoked INTEGER DEFAULT 0
-                );
+    def initialize(self) -> None:
+        return self._impl.initialize()
 
-                CREATE TABLE IF NOT EXISTS sessions (
-                    token TEXT PRIMARY KEY,
-                    user_id TEXT NOT NULL REFERENCES identities(recipient_id),
-                    created_at REAL NOT NULL,
-                    expires_at REAL NOT NULL
-                );
+    def seed_defaults(self) -> None:
+        return self._impl.seed_defaults()
 
-                CREATE TABLE IF NOT EXISTS ledger_blocks (
-                    block_index INTEGER PRIMARY KEY,
-                    block_hash TEXT NOT NULL,
-                    prev_hash TEXT NOT NULL,
-                    merkle_root TEXT NOT NULL,
-                    timestamp_utc REAL NOT NULL,
-                    receipts_json TEXT NOT NULL,
-                    endorsements_json TEXT NOT NULL
-                );
+    def is_setup_complete(self) -> bool:
+        return self._impl.is_setup_complete()
 
-                CREATE TABLE IF NOT EXISTS watermark_index (
-                    watermark_id TEXT PRIMARY KEY,
-                    block_index INTEGER NOT NULL REFERENCES ledger_blocks(block_index),
-                    recipient_id TEXT NOT NULL,
-                    doc_id TEXT NOT NULL,
-                    session_id TEXT NOT NULL
-                );
+    def get_config(self, key: str) -> Optional[str]:
+        return self._impl.get_config(key)
 
-                CREATE TABLE IF NOT EXISTS protected_documents (
-                    doc_id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    sender_id TEXT NOT NULL,
-                    recipient_ids_json TEXT NOT NULL,
-                    doc_hash TEXT NOT NULL,
-                    protected_pdf BLOB NOT NULL,
-                    created_at REAL NOT NULL
-                );
+    def set_config(self, key: str, value: str) -> None:
+        return self._impl.set_config(key, value)
 
-                CREATE TABLE IF NOT EXISTS app_config (
-                    key TEXT PRIMARY KEY,
-                    value TEXT NOT NULL
-                );
-            """)
-            conn.commit()
-        finally:
-            conn.close()
+    def get_identity(self, recipient_id: str) -> Optional[Dict[str, Any]]:
+        return self._impl.get_identity(recipient_id)
 
-        # Automatically seed default administrator and personnel if new database
-        self.seed_defaults()
+    def list_identities(self) -> List[Dict[str, Any]]:
+        return self._impl.list_identities()
 
-    def seed_defaults(self):
-        if self.is_setup_complete():
-            return
-        try:
-            try:
-                from app.api.routes_auth import _generate_identity_keys
-            except ImportError:
-                from backend.app.api.routes_auth import _generate_identity_keys
-        except Exception:
-            return
+    def list_identities_by_role(self, role: str) -> List[Dict[str, Any]]:
+        return self._impl.list_identities_by_role(role)
 
-        try:
-            # Seed primary organization administrator: Miqdaad Sayyed if not present
-            if not self.get_identity("USER-MIQDAAD_SAYYED"):
-                kem, sig, vault, rec_key, rec_hash = _generate_identity_keys("Admin@2026")
-                self.insert_identity(
-                    recipient_id="USER-MIQDAAD_SAYYED",
-                    name="Miqdaad Sayyed",
-                    unit="WESEE Naval Directorate",
-                    role="admin",
-                    encrypted_vault=json.dumps(vault).encode("utf-8"),
-                    public_key_kem=kem,
-                    public_key_sig=sig,
-                    recovery_key_hash=rec_hash,
-                    fingerprint="",
-                    created_at=time.time()
-                )
+    def insert_identity(
+        self,
+        recipient_id: str,
+        name: str,
+        unit: str,
+        role: str,
+        encrypted_vault: bytes,
+        public_key_kem: bytes,
+        public_key_sig: bytes,
+        recovery_key_hash: str,
+        fingerprint: str,
+        created_at: float,
+        is_revoked: int = 0
+    ) -> None:
+        return self._impl.insert_identity(
+            recipient_id, name, unit, role, encrypted_vault,
+            public_key_kem, public_key_sig, recovery_key_hash,
+            fingerprint, created_at, is_revoked
+        )
 
-            # Seed standard recipient personnel for operational testing
-            sample_personnel = [
-                ("RECP-NAV-001", "Commander Vikrant", "WESEE Naval Directorate", "recipient"),
-                ("RECP-INT-002", "Captain Arjun", "Naval Intelligence", "sender"),
-                ("RECP-CYB-003", "Lt Commander Priya", "Cyber Security Command", "investigator")
-            ]
-            for rid, rname, runit, rrole in sample_personnel:
-                if not self.get_identity(rid):
-                    r_kem, r_sig, r_vault, _, r_hash = _generate_identity_keys("Password123!")
-                    self.insert_identity(
-                        recipient_id=rid,
-                        name=rname,
-                        unit=runit,
-                        role=rrole,
-                        encrypted_vault=json.dumps(r_vault).encode("utf-8"),
-                        public_key_kem=r_kem,
-                        public_key_sig=r_sig,
-                        recovery_key_hash=r_hash,
-                        fingerprint="",
-                        created_at=time.time()
-                    )
+    def update_identity_role(self, recipient_id: str, role: str) -> None:
+        return self._impl.update_identity_role(recipient_id, role)
 
-            self.set_config("setup_complete", "true")
-        except Exception as e:
-            # Suppress or log non-fatal seed warnings
-            pass
+    def revoke_identity(self, recipient_id: str) -> None:
+        return self._impl.revoke_identity(recipient_id)
 
-    def get_identity(self, recipient_id):
-        if not recipient_id:
-            return None
-        conn = self._get_connection()
-        try:
-            trimmed = str(recipient_id).strip()
-            normalized_uid = f"USER-{trimmed.upper().replace(' ', '_')}"
-            cursor = conn.execute(
-                """SELECT * FROM identities 
-                   WHERE recipient_id = ? 
-                      OR recipient_id = ? 
-                      OR LOWER(recipient_id) = LOWER(?) 
-                      OR LOWER(name) = LOWER(?)
-                      OR (LOWER(?) = 'admin' AND role = 'admin')
-                   LIMIT 1""",
-                (trimmed, normalized_uid, trimmed, trimmed, trimmed)
-            )
-            return cursor.fetchone()
-        finally:
-            conn.close()
+    def unrevoke_identity(self, recipient_id: str) -> None:
+        return self._impl.unrevoke_identity(recipient_id)
 
-    def list_identities(self):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM identities")
-            return cursor.fetchall()
-        finally:
-            conn.close()
+    def is_identity_revoked(self, recipient_id: str) -> bool:
+        return self._impl.is_identity_revoked(recipient_id)
 
-    def list_identities_by_role(self, role):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM identities WHERE role = ?", (role,))
-            return cursor.fetchall()
-        finally:
-            conn.close()
+    def record_identity_key_history(
+        self,
+        recipient_id: str,
+        key_version: int,
+        public_key_kem: bytes,
+        public_key_sig: bytes,
+        fingerprint: str,
+        created_at: float
+    ) -> None:
+        return self._impl.record_identity_key_history(
+            recipient_id, key_version, public_key_kem, public_key_sig, fingerprint, created_at
+        )
 
-    def insert_identity(self, recipient_id, name, unit, role, encrypted_vault, public_key_kem, public_key_sig, recovery_key_hash, fingerprint, created_at, is_revoked=0):
-        conn = self._get_connection()
-        try:
-            conn.execute("""
-                INSERT INTO identities (
-                    recipient_id, name, unit, role, encrypted_vault, public_key_kem, public_key_sig, recovery_key_hash, fingerprint, created_at, is_revoked
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (recipient_id, name, unit, role, encrypted_vault, public_key_kem, public_key_sig, recovery_key_hash, fingerprint, created_at, is_revoked))
-            conn.commit()
-        finally:
-            conn.close()
+    def get_identity_key_history(self, recipient_id: str) -> List[Dict[str, Any]]:
+        return self._impl.get_identity_key_history(recipient_id)
 
-    def update_identity_role(self, recipient_id, role):
-        conn = self._get_connection()
-        try:
-            conn.execute("UPDATE identities SET role = ? WHERE recipient_id = ?", (role, recipient_id))
-            conn.commit()
-        finally:
-            conn.close()
+    def insert_session(self, token: str, user_id: str, created_at: float, expires_at: float) -> None:
+        return self._impl.insert_session(token, user_id, created_at, expires_at)
 
-    def revoke_identity(self, recipient_id):
-        conn = self._get_connection()
-        try:
-            conn.execute("UPDATE identities SET is_revoked = 1 WHERE recipient_id = ?", (recipient_id,))
-            conn.commit()
-        finally:
-            conn.close()
+    def get_session(self, token: str) -> Optional[Dict[str, Any]]:
+        return self._impl.get_session(token)
 
-    def is_identity_revoked(self, recipient_id):
-        row = self.get_identity(recipient_id)
-        return bool(row and row['is_revoked'])
+    def delete_session(self, token: str) -> None:
+        return self._impl.delete_session(token)
 
-    def insert_session(self, token, user_id, created_at, expires_at):
-        conn = self._get_connection()
-        try:
-            conn.execute("INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)", (token, user_id, created_at, expires_at))
-            conn.commit()
-        finally:
-            conn.close()
+    def cleanup_expired_sessions(self) -> None:
+        return self._impl.cleanup_expired_sessions()
 
-    def get_session(self, token):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM sessions WHERE token = ?", (token,))
-            return cursor.fetchone()
-        finally:
-            conn.close()
+    def create_auth_challenge(
+        self,
+        challenge_id: str,
+        recipient_id: str,
+        nonce: str,
+        created_at: float,
+        expires_at: float
+    ) -> None:
+        return self._impl.create_auth_challenge(challenge_id, recipient_id, nonce, created_at, expires_at)
 
-    def delete_session(self, token):
-        conn = self._get_connection()
-        try:
-            conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
-            conn.commit()
-        finally:
-            conn.close()
+    def get_auth_challenge(self, challenge_id: str) -> Optional[Dict[str, Any]]:
+        return self._impl.get_auth_challenge(challenge_id)
 
-    def cleanup_expired_sessions(self):
-        conn = self._get_connection()
-        try:
-            conn.execute("DELETE FROM sessions WHERE expires_at < ?", (time.time(),))
-            conn.commit()
-        finally:
-            conn.close()
+    def delete_auth_challenge(self, challenge_id: str) -> None:
+        return self._impl.delete_auth_challenge(challenge_id)
 
-    def insert_block(self, block_index, block_hash, prev_hash, merkle_root, timestamp_utc, receipts_json, endorsements_json):
-        conn = self._get_connection()
-        try:
-            conn.execute("""
-                INSERT OR REPLACE INTO ledger_blocks (
-                    block_index, block_hash, prev_hash, merkle_root, timestamp_utc, receipts_json, endorsements_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (block_index, block_hash, prev_hash, merkle_root, timestamp_utc, receipts_json, endorsements_json))
-            conn.commit()
-        finally:
-            conn.close()
+    def insert_block(
+        self,
+        block_index: int,
+        block_hash: str,
+        prev_hash: str,
+        merkle_root: str,
+        timestamp_utc: float,
+        receipts_json: str,
+        endorsements_json: str
+    ) -> None:
+        return self._impl.insert_block(
+            block_index, block_hash, prev_hash, merkle_root, timestamp_utc, receipts_json, endorsements_json
+        )
 
-    def get_latest_block(self):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM ledger_blocks ORDER BY block_index DESC LIMIT 1")
-            return cursor.fetchone()
-        finally:
-            conn.close()
+    def get_latest_block(self) -> Optional[Dict[str, Any]]:
+        return self._impl.get_latest_block()
 
-    def get_block(self, block_index):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM ledger_blocks WHERE block_index = ?", (block_index,))
-            return cursor.fetchone()
-        finally:
-            conn.close()
+    def get_block(self, block_index: int) -> Optional[Dict[str, Any]]:
+        return self._impl.get_block(block_index)
 
-    def get_all_blocks(self):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM ledger_blocks ORDER BY block_index ASC")
-            return cursor.fetchall()
-        finally:
-            conn.close()
+    def get_all_blocks(self) -> List[Dict[str, Any]]:
+        return self._impl.get_all_blocks()
 
-    def block_count(self):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT COUNT(*) FROM ledger_blocks")
-            return cursor.fetchone()[0]
-        finally:
-            conn.close()
+    def block_count(self) -> int:
+        return self._impl.block_count()
 
-    def insert_watermark_index(self, watermark_id, block_index, recipient_id, doc_id, session_id):
-        conn = self._get_connection()
-        try:
-            conn.execute("""
-                INSERT OR REPLACE INTO watermark_index (
-                    watermark_id, block_index, recipient_id, doc_id, session_id
-                ) VALUES (?, ?, ?, ?, ?)
-            """, (watermark_id, block_index, recipient_id, doc_id, session_id))
-            conn.commit()
-        finally:
-            conn.close()
+    def insert_watermark_index(
+        self,
+        watermark_id: str,
+        block_index: int,
+        recipient_id: str,
+        doc_id: str,
+        session_id: str
+    ) -> None:
+        return self._impl.insert_watermark_index(watermark_id, block_index, recipient_id, doc_id, session_id)
 
-    def find_by_watermark(self, watermark_id):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM watermark_index WHERE watermark_id = ?", (watermark_id,))
-            return cursor.fetchone()
-        finally:
-            conn.close()
+    def find_by_watermark(self, watermark_id: str) -> Optional[Dict[str, Any]]:
+        return self._impl.find_by_watermark(watermark_id)
 
-    def find_receipts_by_doc(self, doc_id):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM watermark_index WHERE doc_id = ?", (doc_id,))
-            return cursor.fetchall()
-        finally:
-            conn.close()
+    def find_receipts_by_doc(self, doc_id: str) -> List[Dict[str, Any]]:
+        return self._impl.find_receipts_by_doc(doc_id)
 
-    def store_protected_document(self, doc_id, title, sender_id, recipient_ids_json, doc_hash, protected_pdf, created_at):
-        conn = self._get_connection()
-        try:
-            conn.execute("""
-                INSERT INTO protected_documents (
-                    doc_id, title, sender_id, recipient_ids_json, doc_hash, protected_pdf, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (doc_id, title, sender_id, recipient_ids_json, doc_hash, protected_pdf, created_at))
-            conn.commit()
-        finally:
-            conn.close()
+    def store_protected_document(
+        self,
+        doc_id: str,
+        title: str,
+        sender_id: str,
+        recipient_ids_json: str,
+        doc_hash: str,
+        protected_pdf: bytes,
+        created_at: float,
+        storage_ref: Optional[str] = None
+    ) -> None:
+        return self._impl.store_protected_document(
+            doc_id, title, sender_id, recipient_ids_json, doc_hash, protected_pdf, created_at, storage_ref
+        )
 
-    def get_protected_document(self, doc_id):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM protected_documents WHERE doc_id = ?", (doc_id,))
-            return cursor.fetchone()
-        finally:
-            conn.close()
+    def get_protected_document(self, doc_id: str) -> Optional[Dict[str, Any]]:
+        return self._impl.get_protected_document(doc_id)
 
-    def list_protected_documents(self):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM protected_documents")
-            return cursor.fetchall()
-        finally:
-            conn.close()
+    def list_protected_documents(self) -> List[Dict[str, Any]]:
+        return self._impl.list_protected_documents()
 
-    def list_documents_by_sender(self, sender_id):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT * FROM protected_documents WHERE sender_id = ?", (sender_id,))
-            return cursor.fetchall()
-        finally:
-            conn.close()
+    def list_documents_by_sender(self, sender_id: str) -> List[Dict[str, Any]]:
+        return self._impl.list_documents_by_sender(sender_id)
 
-    def get_config(self, key):
-        conn = self._get_connection()
-        try:
-            cursor = conn.execute("SELECT value FROM app_config WHERE key = ?", (key,))
-            row = cursor.fetchone()
-            return row['value'] if row else None
-        finally:
-            conn.close()
-
-    def set_config(self, key, value):
-        conn = self._get_connection()
-        try:
-            conn.execute("INSERT INTO app_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
-            conn.commit()
-        finally:
-            conn.close()
-
-    def is_setup_complete(self):
-        return self.get_config('setup_complete') == 'true'
+    def list_documents_for_recipient(self, recipient_id: str) -> List[Dict[str, Any]]:
+        return self._impl.list_documents_for_recipient(recipient_id)

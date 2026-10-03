@@ -6,9 +6,13 @@ Organization: Ministry of Defence (WESEE).
 Main FastAPI Application Entrypoint.
 """
 from pathlib import Path
+import time
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+from app.core.events import event_broker
 
 try:
     from app.db.database import Database
@@ -106,12 +110,56 @@ def system_status():
     }
 
 
+@app.get("/health")
+def health_check():
+    """Lightweight Render cold-start and health check endpoint."""
+    return {
+        "status": "healthy",
+        "service": "LeakTrace Enclave",
+        "mode": "connected" if getattr(database, "database_url", None) else "offline",
+        "timestamp": time.time()
+    }
+
+
+@app.get("/api/version")
+def api_version():
+    """Version and standard metadata."""
+    return {
+        "version": "2.0.0",
+        "pqc_kem": "NIST FIPS 203 ML-KEM-768",
+        "pqc_sig": "NIST FIPS 204 ML-DSA-65",
+        "deployment": "Render + Supabase Multi-Client Enclave",
+        "mode": "connected" if getattr(database, "database_url", None) else "offline"
+    }
+
+
+@app.get("/api/events")
+async def root_events_sse():
+    """Server-Sent Events endpoint for real-time dashboard subscriptions."""
+    return StreamingResponse(
+        event_broker.subscribe(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
+@app.get("/api/events/poll")
+def root_events_poll(since: float = 0.0):
+    """Polling fallback for event stream."""
+    return {"events": event_broker.get_recent_events(since=since)}
+
+
 @app.get("/")
 def enclave_root():
     return {
         "status": "online",
         "service": "LeakTrace Cryptographic Attribution & Provenance Enclave",
         "version": "2.0.0",
+        "health": "/health",
         "system_status": "/api/system/status",
         "docs": "/docs"
     }

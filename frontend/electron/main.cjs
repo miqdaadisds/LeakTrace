@@ -180,11 +180,16 @@ function createWindow() {
     return { action: 'deny' };
   });
 
-  // Block external navigation away from localhost backend enclave
+  const remoteApiUrl = process.env.LEAKTRACE_API_URL || null;
+  const isRemoteMode = remoteApiUrl && !remoteApiUrl.includes('127.0.0.1') && !remoteApiUrl.includes('localhost');
+
+  // Block external navigation away from authorized enclaves
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
     try {
       const parsedUrl = new URL(navigationUrl);
-      if (parsedUrl.origin !== `http://127.0.0.1:${BACKEND_PORT}` && parsedUrl.protocol !== 'file:') {
+      const isLocalhost = parsedUrl.origin === `http://127.0.0.1:${BACKEND_PORT}`;
+      const isConfiguredRemote = isRemoteMode && parsedUrl.origin === new URL(remoteApiUrl).origin;
+      if (!isLocalhost && !isConfiguredRemote && parsedUrl.protocol !== 'file:') {
         console.warn(`[LeakTrace Security] Blocked external navigation: ${navigationUrl}`);
         event.preventDefault();
       }
@@ -205,6 +210,15 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  const remoteApiUrl = process.env.LEAKTRACE_API_URL || null;
+  const isRemoteMode = remoteApiUrl && !remoteApiUrl.includes('127.0.0.1') && !remoteApiUrl.includes('localhost');
+
+  if (isRemoteMode) {
+    console.log(`[LeakTrace] Connected Mode: Active Central Backend configured at ${remoteApiUrl}`);
+    createWindow();
+    return;
+  }
+
   try {
     let alreadyRunning = false;
     try {
@@ -231,6 +245,7 @@ app.whenReady().then(async () => {
     );
     app.quit();
   }
+});
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

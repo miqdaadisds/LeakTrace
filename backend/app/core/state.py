@@ -238,18 +238,40 @@ class SystemState:
         self.secure_packages[f"{doc_id}:ALL"] = protected_pdf
 
     def _register_db_row(self, row):
-        """Converts an SQLite identity row into a RegisteredIdentity."""
+        """Converts an SQLite/PostgreSQL identity row into a RegisteredIdentity."""
         try:
             import json
-            raw_vault_data = row["encrypted_vault"]
-            if isinstance(raw_vault_data, (bytes, bytearray)):
-                raw_vault_data = raw_vault_data.decode("utf-8")
-            raw_vault = json.loads(raw_vault_data) if isinstance(raw_vault_data, str) else raw_vault_data
-            vault = raw_vault.get("primary", raw_vault)
-            pub_kem = row["public_key_kem"]
-            pub_x = pub_kem[:32]
-            pub_pqc = pub_kem[32:]
-            pub_sig = row["public_key_sig"]
+            raw_vault_data = row.get("encrypted_vault") if hasattr(row, "get") else row["encrypted_vault"]
+            vault = {}
+            if raw_vault_data:
+                if isinstance(raw_vault_data, memoryview):
+                    raw_vault_data = bytes(raw_vault_data)
+                if isinstance(raw_vault_data, (bytes, bytearray)):
+                    try:
+                        raw_vault_data = raw_vault_data.decode("utf-8")
+                    except Exception:
+                        pass
+                if isinstance(raw_vault_data, str) and raw_vault_data.strip():
+                    try:
+                        raw_vault = json.loads(raw_vault_data)
+                        vault = raw_vault.get("primary", raw_vault) if isinstance(raw_vault, dict) else raw_vault
+                    except Exception:
+                        vault = {}
+                elif isinstance(raw_vault_data, dict):
+                    vault = raw_vault_data.get("primary", raw_vault_data)
+
+            pub_kem = row.get("public_key_kem") if hasattr(row, "get") else row["public_key_kem"]
+            if isinstance(pub_kem, memoryview):
+                pub_kem = bytes(pub_kem)
+            pub_x = pub_kem[:32] if pub_kem and len(pub_kem) >= 32 else b""
+            pub_pqc = pub_kem[32:] if pub_kem and len(pub_kem) > 32 else b""
+
+            pub_sig = row.get("public_key_sig") if hasattr(row, "get") else row["public_key_sig"]
+            if isinstance(pub_sig, memoryview):
+                pub_sig = bytes(pub_sig)
+
+            role = row.get("role") if hasattr(row, "get") else (row["role"] if "role" in row.keys() else "recipient")
+            rec_hash = row.get("recovery_key_hash") if hasattr(row, "get") else (row["recovery_key_hash"] if "recovery_key_hash" in row.keys() else None)
 
             ident = RegisteredIdentity(
                 recipient_id=row["recipient_id"],
@@ -259,8 +281,8 @@ class SystemState:
                 pub_pqc=pub_pqc,
                 pub_sig=pub_sig,
                 encrypted_vault=vault,
-                role=row["role"] if "role" in row.keys() else "recipient",
-                recovery_key_hash=row["recovery_key_hash"] if "recovery_key_hash" in row.keys() else None
+                role=role or "recipient",
+                recovery_key_hash=rec_hash
             )
             self.identities[row["recipient_id"]] = ident
             forensic_engine.register_recipient_identity(

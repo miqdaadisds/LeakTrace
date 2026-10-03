@@ -17,7 +17,9 @@ import {
   getCurrentUser,
   setAuthToken,
   clearAuthToken,
-  logout
+  logout,
+  subscribeToRealtimeEvents,
+  checkHealthWithRetry
 } from './api';
 
 export default function App() {
@@ -30,6 +32,7 @@ export default function App() {
   const [activeDocs, setActiveDocs] = useState([]);
   const [blocks, setBlocks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
 
   const loadAllData = async () => {
     try {
@@ -53,6 +56,11 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Check initial health and cold-start recovery
+    checkHealthWithRetry(6, 1500).then(({ online }) => {
+      setConnectionStatus(online ? 'connected' : 'offline');
+    });
+
     checkAuthStatus().then(status => {
       if (!status.setup_complete) {
         setSetupRequired(true);
@@ -71,7 +79,39 @@ export default function App() {
           }
         }).catch(() => setLoading(false));
       }
-    }).catch(() => setLoading(false));
+    }).catch(() => {
+      setConnectionStatus('offline');
+      setLoading(false);
+    });
+
+    // Realtime SSE / Polling Subscription
+    const unsubscribe = subscribeToRealtimeEvents(
+      (event) => {
+        setConnectionStatus('connected');
+        console.log('[Realtime Event Received]', event.event_type, event.data);
+        if (event.event_type === 'USER_REGISTERED' || event.event_type === 'USER_APPROVED' || event.event_type === 'ROLE_CHANGED') {
+          fetchIdentities().then(setIdentities).catch(() => {});
+          if (event.data?.recipient_id && user && event.data.recipient_id === user.recipient_id) {
+            setUser(prev => ({ ...prev, role: event.data.role }));
+          }
+        } else if (event.event_type === 'DOCUMENT_AUTHORIZED' || event.event_type === 'DOCUMENT_AVAILABLE') {
+          fetchActiveDocuments().then(setActiveDocs).catch(() => {});
+        } else if (event.event_type === 'PROVENANCE_COMMITTED') {
+          fetchLedgerBlocks().then(setBlocks).catch(() => {});
+          fetchSystemStatus().then(setSystemStatus).catch(() => {});
+        } else if (event.event_type === 'IDENTITY_REVOKED') {
+          fetchIdentities().then(setIdentities).catch(() => {});
+        }
+      },
+      (err) => {
+        // Warning on connection drop, fallback will poll
+        console.warn('[Realtime Stream Warning]', err);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleLogout = async () => {
@@ -83,7 +123,12 @@ export default function App() {
   };
 
   if (loading) {
-    return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center space-y-4">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-sm font-semibold text-slate-300">Connecting to LeakTrace Security Enclave...</p>
+      </div>
+    );
   }
 
   if (!user) {
@@ -93,6 +138,7 @@ export default function App() {
         setAuthToken(token); 
         setUser(user); 
         setSetupRequired(false);
+        setConnectionStatus('connected');
         loadAllData();
       }} 
     />;
@@ -115,6 +161,7 @@ export default function App() {
         setShowAdmin={setShowAdmin}
         user={user}
         onLogout={handleLogout}
+        connectionStatus={connectionStatus}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">

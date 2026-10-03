@@ -78,12 +78,26 @@ def get_revocation_list():
     }
 
 
+from app.core.events import event_broker
+
+try:
+    from app.auth import middleware
+except ImportError:
+    from backend.app.auth import middleware
+
+
 @router.post("/revoke-identity")
 def revoke_identity(req: RevokeIdentityRequest):
     """Revokes a recipient's credentials, preventing further decryption."""
-    if req.recipient_id not in system_state.identities:
+    if req.recipient_id not in system_state.identities and not (middleware.db and middleware.db.get_identity(req.recipient_id)):
         raise HTTPException(status_code=404, detail="Recipient identity not found.")
     info = system_state.revoke_identity(req.recipient_id, req.reason)
+    if middleware.db:
+        middleware.db.revoke_identity(req.recipient_id)
+    event_broker.publish("IDENTITY_REVOKED", {
+        "recipient_id": req.recipient_id,
+        "reason": req.reason
+    })
     return {"status": "IDENTITY_REVOKED", "revocation_info": info}
 
 
@@ -91,6 +105,9 @@ def revoke_identity(req: RevokeIdentityRequest):
 def unrevoke_identity(req: RevokeIdentityRequest):
     """Restores a previously revoked identity."""
     success = system_state.unrevoke_identity(req.recipient_id)
+    if middleware.db:
+        middleware.db.unrevoke_identity(req.recipient_id)
+        success = True
     if not success:
         raise HTTPException(status_code=404, detail="Recipient was not in revocation list.")
     return {"status": "IDENTITY_RESTORED", "recipient_id": req.recipient_id}

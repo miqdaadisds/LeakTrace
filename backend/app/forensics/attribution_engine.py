@@ -144,6 +144,8 @@ class ForensicAttributionEngine:
             detailed_evidence=detailed_evidence
         )
 
+    analyze_pdf_leak = investigate_pdf_leak
+
     def investigate_text_leak(self, text: str) -> ForensicAttributionResult:
         """Fallback analysis for extracted or copied text leaks."""
         payload = self.text_watermarker.extract(text)
