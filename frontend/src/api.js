@@ -5,25 +5,22 @@ export const LOCAL_DEFAULT_BACKEND = 'http://127.0.0.1:8000';
 export const CENTRAL_DEFAULT_BACKEND = 'https://leaktrace-backend.onrender.com';
 
 function resolveDefaultApiUrl() {
-  if (typeof window !== 'undefined' && window.electronAPI?.apiUrl) {
-    return window.electronAPI.apiUrl;
-  }
-  if (typeof window !== 'undefined' && window.electronAPI?.isElectron) {
-    return LOCAL_DEFAULT_BACKEND;
-  }
-  if (typeof window !== 'undefined' && window.__TRACELEAK_API_URL__) {
-    return window.__TRACELEAK_API_URL__;
-  }
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('traceleak_api_url') || localStorage.getItem('leaktrace_api_url');
     if (saved) {
-      return saved;
+      return saved.trim().replace(/\/+$/, '');
     }
   }
-  if (import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined' && window.electronAPI?.apiUrl) {
+    return window.electronAPI.apiUrl.trim().replace(/\/+$/, '');
   }
-  return LOCAL_DEFAULT_BACKEND;
+  if (typeof window !== 'undefined' && window.__TRACELEAK_API_URL__) {
+    return window.__TRACELEAK_API_URL__.trim().replace(/\/+$/, '');
+  }
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL.trim().replace(/\/+$/, '');
+  }
+  return CENTRAL_DEFAULT_BACKEND;
 }
 
 const defaultUrl = resolveDefaultApiUrl();
@@ -37,11 +34,11 @@ export function getApiBaseUrl() {
   return api.defaults.baseURL;
 }
 
-export function setApiBaseUrl(url) {
+export function setApiBaseUrl(url, persist = true) {
   if (url) {
     const cleanUrl = url.trim().replace(/\/+$/, '');
     api.defaults.baseURL = cleanUrl;
-    if (typeof window !== 'undefined') {
+    if (persist && typeof window !== 'undefined') {
       localStorage.setItem('traceleak_api_url', cleanUrl);
       localStorage.setItem('leaktrace_api_url', cleanUrl);
     }
@@ -72,22 +69,39 @@ function authHeaders() {
 // ==========================================
 // 1. HEALTH & COLD-START RECOVERY
 // ==========================================
-export const checkHealthWithRetry = async (maxAttempts = 6, intervalMs = 1500) => {
+export const testEnclaveHealth = async (url) => {
+  const cleanUrl = url.trim().replace(/\/+$/, '');
+  const start = Date.now();
+  try {
+    const res = await axios.get(`${cleanUrl}/health`, { timeout: 6000 });
+    return { online: res.status === 200, latency: Date.now() - start, data: res.data };
+  } catch (err) {
+    return { online: false, error: err.message };
+  }
+};
+
+export const checkHealthWithRetry = async (maxAttempts = 10, intervalMs = 2000) => {
+  const currentBase = api.defaults.baseURL;
+  const isCloud = currentBase.includes('onrender.com');
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const res = await api.get('/health', { timeout: 4000 });
+      const res = await api.get('/health', { timeout: isCloud ? 6000 : 3000 });
       if (res.status === 200) {
-        return { online: true, data: res.data };
+        return { online: true, data: res.data, url: api.defaults.baseURL };
       }
     } catch (err) {
-      // If remote endpoint is not responding, seamlessly check local enclave at 127.0.0.1:8000
-      if (api.defaults.baseURL !== 'http://127.0.0.1:8000') {
+      // If cloud is cold-starting or unreachable after several attempts, test local fallback
+      if (attempt >= 3 && isCloud) {
         try {
           const localRes = await axios.get('http://127.0.0.1:8000/health', { timeout: 2000 });
           if (localRes.status === 200) {
-            console.log('[TraceLeak] Seamlessly connected to local secure enclave at http://127.0.0.1:8000');
-            setApiBaseUrl('http://127.0.0.1:8000');
-            return { online: true, data: localRes.data };
+            console.log('[TraceLeak] Detected local secure enclave at http://127.0.0.1:8000');
+            // Do not permanently overwrite saved preference, but switch active session if cloud is down
+            if (attempt === maxAttempts) {
+              setApiBaseUrl('http://127.0.0.1:8000', false);
+              return { online: true, data: localRes.data, url: 'http://127.0.0.1:8000', fallback: true };
+            }
           }
         } catch (_) {}
       }
@@ -191,8 +205,13 @@ export const assignRole = async (recipientId, role) => {
   return res.data;
 };
 
+export const syncAdminVault = async (vaultPayload) => {
+  const res = await api.post('/api/auth/sync-admin-vault', vaultPayload);
+  return res.data;
+};
+
 // ==========================================
-// 3. REALTIME EVENTS (SSE & POLLING FALLBACK)
+// 3. REALTIME EVENTS (DUAL SSE & HEARTBEAT POLLING)
 // ==========================================
 export function subscribeToRealtimeEvents(onEvent, onError) {
   const baseURL = api.defaults.baseURL;
@@ -200,25 +219,29 @@ export function subscribeToRealtimeEvents(onEvent, onError) {
   let eventSource = null;
   let pollInterval = null;
   let lastTimestamp = Date.now() / 1000;
+  const processedEventKeys = new Set();
 
+  const handleMessage = (e) => {
+    try {
+      const parsed = JSON.parse(e.data);
+      const evKey = `${parsed.event_type}_${parsed.timestamp || ''}_${JSON.stringify(parsed.data || '')}`;
+      if (processedEventKeys.has(evKey)) return;
+      processedEventKeys.add(evKey);
+      if (processedEventKeys.size > 200) {
+        const oldest = Array.from(processedEventKeys).slice(0, 50);
+        oldest.forEach(k => processedEventKeys.delete(k));
+      }
+
+      if (parsed.timestamp && parsed.timestamp > lastTimestamp) {
+        lastTimestamp = parsed.timestamp;
+      }
+      onEvent(parsed);
+    } catch (_) {}
+  };
+
+  // 1. Establish SSE Persistent Stream
   try {
     eventSource = new EventSource(sseUrl);
-    
-    const handleMessage = (e) => {
-      try {
-        const parsed = JSON.parse(e.data);
-        if (parsed.timestamp) lastTimestamp = parsed.timestamp;
-        onEvent(parsed);
-      } catch (_) {}
-    };
-
-    eventSource.onopen = () => {
-      if (pollInterval) {
-        clearInterval(pollInterval);
-        pollInterval = null;
-      }
-    };
-
     eventSource.onmessage = handleMessage;
     eventSource.addEventListener('USER_REGISTERED', handleMessage);
     eventSource.addEventListener('USER_APPROVED', handleMessage);
@@ -230,37 +253,37 @@ export function subscribeToRealtimeEvents(onEvent, onError) {
 
     eventSource.onerror = (err) => {
       if (onError) onError(err);
-      if (!pollInterval) {
-        pollInterval = setInterval(async () => {
-          try {
-            const res = await api.get(`/api/events/poll?since=${lastTimestamp}`);
-            if (res.data?.events) {
-              for (const ev of res.data.events) {
-                if (ev.timestamp > lastTimestamp) lastTimestamp = ev.timestamp;
-                onEvent(ev);
-              }
-            }
-          } catch (_) {}
-        }, 3000);
-      }
     };
   } catch (err) {
-    pollInterval = setInterval(async () => {
-      try {
-        const res = await api.get(`/api/events/poll?since=${lastTimestamp}`);
-        if (res.data?.events) {
-          for (const ev of res.data.events) {
-            if (ev.timestamp > lastTimestamp) lastTimestamp = ev.timestamp;
+    if (onError) onError(err);
+  }
+
+  // 2. Active Heartbeat Polling Fallback (runs in parallel every 3.5s to bypass cloud proxy buffering)
+  pollInterval = setInterval(async () => {
+    try {
+      const res = await api.get(`/api/events/poll?since=${lastTimestamp}`, { timeout: 4000 });
+      if (res.data?.events && Array.isArray(res.data.events)) {
+        for (const ev of res.data.events) {
+          const evKey = `${ev.event_type}_${ev.timestamp || ''}_${JSON.stringify(ev.data || '')}`;
+          if (!processedEventKeys.has(evKey)) {
+            processedEventKeys.add(evKey);
+            if (ev.timestamp && ev.timestamp > lastTimestamp) {
+              lastTimestamp = ev.timestamp;
+            }
             onEvent(ev);
           }
         }
-      } catch (_) {}
-    }, 3000);
-  }
+      }
+    } catch (_) {}
+  }, 3500);
 
   return () => {
-    if (eventSource) eventSource.close();
-    if (pollInterval) clearInterval(pollInterval);
+    if (eventSource) {
+      try { eventSource.close(); } catch (_) {}
+    }
+    if (pollInterval) {
+      clearInterval(pollInterval);
+    }
   };
 }
 

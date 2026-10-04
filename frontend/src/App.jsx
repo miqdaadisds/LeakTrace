@@ -33,6 +33,33 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState('connecting');
 
+  // Theme Management (Light & Dark Mode)
+  const [theme, setTheme] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('traceleak_theme');
+      if (saved) return saved;
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('traceleak_theme', theme);
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+
   const loadAllData = async () => {
     try {
       const [status, idList, docList, blockList, me] = await Promise.all([
@@ -54,9 +81,17 @@ export default function App() {
     }
   };
 
+  const handleEnclaveChanged = () => {
+    setConnectionStatus('connecting');
+    checkHealthWithRetry(8, 1500).then(({ online }) => {
+      setConnectionStatus(online ? 'connected' : 'offline');
+      loadAllData();
+    });
+  };
+
   useEffect(() => {
     // Check initial health and cold-start recovery
-    checkHealthWithRetry(6, 1500).then(({ online }) => {
+    checkHealthWithRetry(8, 1500).then(({ online }) => {
       setConnectionStatus(online ? 'connected' : 'offline');
     });
 
@@ -103,8 +138,7 @@ export default function App() {
         }
       },
       (err) => {
-        // Warning on connection drop, fallback will poll
-        console.warn('[Realtime Stream Warning]', err);
+        console.warn('[Realtime Stream Notice]', err);
       }
     );
 
@@ -113,6 +147,15 @@ export default function App() {
     };
   }, []);
 
+  // Active Directory Refresh Polling when User is Logged In
+  useEffect(() => {
+    if (!user) return;
+    const interval = setInterval(() => {
+      fetchIdentities().then(setIdentities).catch(() => {});
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   const handleLogout = async () => {
     try {
       await logout();
@@ -120,6 +163,8 @@ export default function App() {
     clearAuthToken();
     setUser(null);
   };
+
+  const pendingCount = identities.filter(i => i.role === 'pending' || i.approved === false).length;
 
   if (loading) {
     return (
@@ -131,26 +176,31 @@ export default function App() {
   }
 
   if (!user) {
-    return <LoginScreen 
-      setupRequired={setupRequired} 
-      onLogin={(user, token) => { 
-        setAuthToken(token); 
-        setUser(user); 
-        setSetupRequired(false);
-        setConnectionStatus('connected');
-        loadAllData();
-      }} 
-    />;
+    return (
+      <LoginScreen 
+        setupRequired={setupRequired} 
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onEnclaveChanged={handleEnclaveChanged}
+        onLogin={(user, token) => { 
+          setAuthToken(token); 
+          setUser(user); 
+          setSetupRequired(false);
+          setConnectionStatus('connected');
+          loadAllData();
+        }} 
+      />
+    );
   }
 
   return (
-    <div className="relative min-h-screen bg-slate-900/10 text-slate-900 flex flex-col font-sans overflow-x-hidden selection:bg-blue-500/20">
+    <div className="relative min-h-screen bg-slate-900/5 dark:bg-slate-950/60 text-slate-900 dark:text-slate-100 flex flex-col font-sans overflow-x-hidden selection:bg-blue-500/20 transition-colors duration-300">
       {/* Liquid Frosted Ambient Backdrop Mesh */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden -z-10">
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-500/20 blur-3xl filter animate-pulse" style={{ animationDuration: '8s' }} />
-        <div className="absolute top-1/4 -right-32 w-[28rem] h-[28rem] rounded-full bg-amber-400/20 blur-3xl filter animate-pulse" style={{ animationDuration: '10s' }} />
-        <div className="absolute -bottom-32 left-1/4 w-[32rem] h-[32rem] rounded-full bg-indigo-500/20 blur-3xl filter animate-pulse" style={{ animationDuration: '9s' }} />
-        <div className="absolute top-2/3 right-1/4 w-80 h-80 rounded-full bg-cyan-400/20 blur-3xl filter animate-pulse" style={{ animationDuration: '7s' }} />
+        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-blue-500/20 dark:bg-blue-600/15 blur-3xl filter animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute top-1/4 -right-32 w-[28rem] h-[28rem] rounded-full bg-amber-400/20 dark:bg-amber-500/15 blur-3xl filter animate-pulse" style={{ animationDuration: '10s' }} />
+        <div className="absolute -bottom-32 left-1/4 w-[32rem] h-[32rem] rounded-full bg-indigo-500/20 dark:bg-indigo-600/15 blur-3xl filter animate-pulse" style={{ animationDuration: '9s' }} />
+        <div className="absolute top-2/3 right-1/4 w-80 h-80 rounded-full bg-cyan-400/20 dark:bg-cyan-500/15 blur-3xl filter animate-pulse" style={{ animationDuration: '7s' }} />
       </div>
 
       <Header
@@ -161,6 +211,10 @@ export default function App() {
         user={user}
         onLogout={handleLogout}
         connectionStatus={connectionStatus}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        pendingCount={pendingCount}
+        onEnclaveChanged={handleEnclaveChanged}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -204,7 +258,7 @@ export default function App() {
         </div>
       </main>
 
-      <footer className="border-t border-slate-200/60 bg-white/40 py-3 text-center text-[11px] text-slate-400">
+      <footer className="border-t border-slate-200/60 dark:border-slate-800/60 bg-white/40 dark:bg-slate-900/40 py-3 text-center text-[11px] text-slate-400 dark:text-slate-500">
         TraceLeak &bull; SIH 2026 &bull; Ministry of Defence / WESEE
       </footer>
     </div>

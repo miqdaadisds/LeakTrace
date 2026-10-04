@@ -231,6 +231,16 @@ class SQLiteRepository(BaseRepository):
                 INSERT INTO identities (
                     recipient_id, name, unit, role, encrypted_vault, public_key_kem, public_key_sig, recovery_key_hash, fingerprint, created_at, is_revoked
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (recipient_id) DO UPDATE SET
+                    name = excluded.name,
+                    unit = excluded.unit,
+                    role = excluded.role,
+                    encrypted_vault = excluded.encrypted_vault,
+                    public_key_kem = excluded.public_key_kem,
+                    public_key_sig = excluded.public_key_sig,
+                    recovery_key_hash = excluded.recovery_key_hash,
+                    fingerprint = excluded.fingerprint,
+                    is_revoked = excluded.is_revoked
             """, (recipient_id, name, unit, role, encrypted_vault, public_key_kem, public_key_sig, recovery_key_hash, fingerprint, created_at, is_revoked))
             conn.commit()
         finally:

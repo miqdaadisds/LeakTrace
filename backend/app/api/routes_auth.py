@@ -72,6 +72,15 @@ class RegisterPublicRequest(BaseModel):
     public_key_sig_b64: str
     fingerprint: Optional[str] = ""
 
+class SyncAdminVaultRequest(BaseModel):
+    recipient_id: str
+    name: str
+    unit: str
+    encrypted_vault_b64: str
+    public_key_kem_b64: str
+    public_key_sig_b64: str
+    recovery_key_hash: str
+
 @router.get("/status")
 def auth_status(credentials: Optional[HTTPAuthorizationCredentials] = Depends(middleware.security)):
     if not middleware.db:
@@ -467,6 +476,52 @@ def auth_register_public(req: RegisterPublicRequest):
             "unit": req.unit or "",
             "role": "pending"
         }
+    }
+
+@router.post("/sync-admin-vault")
+def auth_sync_admin_vault(req: SyncAdminVaultRequest):
+    """
+    Administrative Synchronization Endpoint:
+    Synchronizes the organization administrator's Argon2id protected credential vault
+    and post-quantum public keys between connected enclaves.
+    """
+    if not middleware.db:
+        raise HTTPException(status_code=500, detail="Database not initialized")
+    if req.recipient_id.strip().upper() != "USER-MIQDAAD_SAYYED":
+        raise HTTPException(status_code=403, detail="Only organization admin vault can be synchronized")
+
+    try:
+        vault_bytes = base64.b64decode(req.encrypted_vault_b64)
+        kem_bytes = base64.b64decode(req.public_key_kem_b64)
+        sig_bytes = base64.b64decode(req.public_key_sig_b64)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Base64 decoding error: {str(e)}")
+
+    middleware.db.insert_identity(
+        recipient_id=req.recipient_id.strip(),
+        name=req.name.strip(),
+        unit=req.unit.strip(),
+        role="admin",
+        encrypted_vault=vault_bytes,
+        public_key_kem=kem_bytes,
+        public_key_sig=sig_bytes,
+        recovery_key_hash=req.recovery_key_hash.strip(),
+        fingerprint="",
+        created_at=time.time(),
+        is_revoked=0
+    )
+    middleware.db.set_config('setup_complete', 'true')
+    system_state.sync_from_db(middleware.db)
+
+    # Broadcast event so all connected dashboard listeners refresh identity cache
+    event_broker.publish("ROLE_CHANGED", {
+        "recipient_id": req.recipient_id.strip(),
+        "role": "admin"
+    })
+
+    return {
+        "status": "SUCCESS",
+        "message": "Administrator vault synchronized successfully across enclaves."
     }
 
 @router.get("/events")

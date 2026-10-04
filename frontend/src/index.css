@@ -10,20 +10,36 @@
   }
 
   body {
-    background-color: #0b1120;
+    background-color: #f8fafc;
     background-image: 
-      radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.45) 0px, transparent 55%),
-      radial-gradient(at 100% 0%, rgba(245, 158, 11, 0.3) 0px, transparent 50%),
-      radial-gradient(at 50% 100%, rgba(14, 165, 233, 0.35) 0px, transparent 60%),
-      radial-gradient(at 80% 75%, rgba(99, 102, 241, 0.3) 0px, transparent 55%);
+      radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.18) 0px, transparent 55%),
+      radial-gradient(at 100% 0%, rgba(245, 158, 11, 0.15) 0px, transparent 50%),
+      radial-gradient(at 50% 100%, rgba(14, 165, 233, 0.16) 0px, transparent 60%),
+      radial-gradient(at 80% 75%, rgba(99, 102, 241, 0.14) 0px, transparent 55%);
     background-attachment: fixed;
     color: #0f172a;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  .dark body, body.dark {
+    background-color: #070d18;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.32) 0px, transparent 55%),
+      radial-gradient(at 100% 0%, rgba(217, 119, 6, 0.22) 0px, transparent 50%),
+      radial-gradient(at 50% 100%, rgba(14, 165, 233, 0.25) 0px, transparent 60%),
+      radial-gradient(at 80% 75%, rgba(99, 102, 241, 0.28) 0px, transparent 55%);
+    color: #f8fafc;
   }
 
   input, select, textarea {
-    color: #0f172a !important;
+    color: #0f172a;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .dark input, .dark select, .dark textarea {
+    color: #f8fafc !important;
   }
 }
 
@@ -38,6 +54,17 @@
     0 4px 12px -2px rgba(15, 23, 42, 0.04),
     inset 0 1px 1px 0 rgba(255, 255, 255, 1),
     inset 0 -1px 1px 0 rgba(255, 255, 255, 0.3);
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dark .apple-glass, .dark .liquid-glass {
+  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 20px 40px -15px rgba(0, 0, 0, 0.6),
+    0 4px 12px -2px rgba(0, 0, 0, 0.3),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 1px 0 rgba(0, 0, 0, 0.4);
 }
 
 .apple-glass-card, .liquid-glass-card {
@@ -50,9 +77,18 @@
     0 16px 36px -10px rgba(15, 23, 42, 0.08),
     0 4px 12px -2px rgba(15, 23, 42, 0.03),
     inset 0 1px 1px 0 rgba(255, 255, 255, 1);
-  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.15s ease;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease, background-color 0.3s ease;
   will-change: transform;
   transform: translateZ(0);
+}
+
+.dark .apple-glass-card, .dark .liquid-glass-card {
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 16px 36px -10px rgba(0, 0, 0, 0.5),
+    0 4px 12px -2px rgba(0, 0, 0, 0.3),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .apple-glass-card:hover, .liquid-glass-card:hover {
@@ -63,10 +99,16 @@
     inset 0 1px 1px 0 rgba(255, 255, 255, 1);
 }
 
+.dark .apple-glass-card:hover, .dark .liquid-glass-card:hover {
+  box-shadow: 
+    0 24px 48px -12px rgba(0, 0, 0, 0.7),
+    0 8px 18px -4px rgba(0, 0, 0, 0.4),
+    inset 0 1px 1px 0 rgba(255, 255, 255, 0.15);
+}
+
 button:active {
   transform: scale(0.98);
 }
-
 
 .apple-glass-subtle, .liquid-glass-subtle {
   background: rgba(255, 255, 255, 0.65);
@@ -75,6 +117,13 @@ button:active {
   border: 1px solid rgba(255, 255, 255, 0.75);
   border-radius: 18px;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.95);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.dark .apple-glass-subtle, .dark .liquid-glass-subtle {
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.08);
 }
 
 .liquid-pill-active {
@@ -84,6 +133,15 @@ button:active {
     0 8px 18px -4px rgba(15, 23, 42, 0.12),
     0 2px 6px -1px rgba(15, 23, 42, 0.06),
     inset 0 1px 1px rgba(255, 255, 255, 1);
+}
+
+.dark .liquid-pill-active {
+  background: rgba(30, 41, 59, 0.95);
+  color: #f8fafc;
+  box-shadow: 
+    0 8px 18px -4px rgba(0, 0, 0, 0.4),
+    0 2px 6px -1px rgba(0, 0, 0, 0.2),
+    inset 0 1px 1px rgba(255, 255, 255, 0.1);
 }
 
 
@@ -119,3 +177,36 @@ button:active {
   animation: appleTabFadeIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: opacity, transform;
 }
+
+/* Dark Mode Typography & Container Adaptations */
+.dark .text-slate-900 {
+  color: #f8fafc !important;
+}
+.dark .text-slate-800 {
+  color: #f1f5f9 !important;
+}
+.dark .text-slate-700 {
+  color: #e2e8f0 !important;
+}
+.dark .text-slate-600 {
+  color: #cbd5e1 !important;
+}
+.dark .text-slate-500 {
+  color: #94a3b8 !important;
+}
+.dark .bg-white {
+  background-color: rgba(30, 41, 59, 0.85) !important;
+}
+.dark .bg-white\/80 {
+  background-color: rgba(30, 41, 59, 0.75) !important;
+}
+.dark .bg-slate-50, .dark .bg-slate-50\/80 {
+  background-color: rgba(15, 23, 42, 0.65) !important;
+}
+.dark .border-slate-200, .dark .border-slate-200\/60, .dark .border-slate-200\/80, .dark .border-slate-300 {
+  border-color: rgba(71, 85, 105, 0.5) !important;
+}
+.dark .border-slate-100 {
+  border-color: rgba(51, 65, 85, 0.4) !important;
+}
+
