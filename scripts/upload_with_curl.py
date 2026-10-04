@@ -23,6 +23,32 @@ def upload():
         ("TraceLeak-Setup-1.2.0.exe", os.path.abspath("releases/TraceLeak Setup 1.2.0.exe"), "application/vnd.microsoft.portable-executable")
     ]
 
+    # Fetch existing assets to delete them before re-uploading
+    cmd_list = [
+        "curl.exe", "-s",
+        "-H", f"Authorization: Bearer {token}",
+        "-H", "Accept: application/vnd.github+json",
+        f"https://api.github.com/repos/miqdaadisds/LeakTrace/releases/{release_id}/assets"
+    ]
+    p = subprocess.Popen(cmd_list, stdout=subprocess.PIPE, text=True)
+    out_list, _ = p.communicate()
+    try:
+        existing = json.loads(out_list)
+        for item in existing:
+            for name, _, _ in assets:
+                if item.get("name") == name:
+                    asset_id = item["id"]
+                    print(f"Deleting older release asset {name} (ID: {asset_id})...")
+                    del_cmd = [
+                        "curl.exe", "-s", "-X", "DELETE",
+                        "-H", f"Authorization: Bearer {token}",
+                        f"https://api.github.com/repos/miqdaadisds/LeakTrace/releases/assets/{asset_id}"
+                    ]
+                    subprocess.run(del_cmd)
+                    print(f"Deleted old asset {name}.")
+    except Exception as e:
+        print(f"Warning checking existing assets: {e}")
+
     for name, path, mime in assets:
         if not os.path.exists(path):
             print(f"File not found: {path}")
@@ -35,7 +61,6 @@ def upload():
 
         url = f"https://uploads.github.com/repos/miqdaadisds/LeakTrace/releases/{release_id}/assets?name={name}"
 
-        # Using curl.exe with progress bar
         cmd = [
             "curl.exe",
             "-X", "POST",
