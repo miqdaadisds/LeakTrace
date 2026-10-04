@@ -5,7 +5,6 @@ import InvestigateFlow from './components/InvestigateFlow';
 import DocumentPublisher from './components/DocumentPublisher';
 import IdentityManager from './components/IdentityManager';
 import BlockchainExplorer from './components/BlockchainExplorer';
-import SecurityConsole from './components/SecurityConsole';
 import LoginScreen from './components/LoginScreen';
 
 import {
@@ -165,50 +164,44 @@ export default function App() {
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'decrypt' && (
-          <DecryptFlow
-            user={user}
-            identities={identities}
-            activeDocs={activeDocs}
-            onDecrypted={loadAllData}
-            onGoToDistribute={() => setActiveTab('distribute')}
-          />
-        )}
+        <div key={activeTab} className="tab-transition-apple">
+          {activeTab === 'decrypt' && (
+            <DecryptFlow
+              user={user}
+              identities={identities}
+              activeDocs={activeDocs}
+              onDecrypted={loadAllData}
+              onGoToDistribute={() => setActiveTab('distribute')}
+            />
+          )}
 
-        {activeTab === 'investigate' && (
-          <InvestigateFlow onGoToLedger={() => setActiveTab('provenance')} />
-        )}
+          {activeTab === 'investigate' && (
+            <InvestigateFlow onGoToLedger={() => setActiveTab('provenance')} />
+          )}
 
-        {activeTab === 'distribute' && (
-          <DocumentPublisher
-            identities={identities}
-            activeDocs={activeDocs}
-            onDocumentPublished={loadAllData}
-            onGoToDecrypt={() => setActiveTab('decrypt')}
-          />
-        )}
+          {activeTab === 'distribute' && (
+            <DocumentPublisher
+              identities={identities}
+              activeDocs={activeDocs}
+              onDocumentPublished={loadAllData}
+              onGoToDecrypt={() => setActiveTab('decrypt')}
+            />
+          )}
 
-        {activeTab === 'identities' && (
-          <IdentityManager
-            identities={identities}
-            onIdentityCreated={loadAllData}
-          />
-        )}
+          {activeTab === 'identities' && (
+            <IdentityManager
+              identities={identities}
+              onIdentityCreated={loadAllData}
+            />
+          )}
 
-        {activeTab === 'provenance' && (
-          <BlockchainExplorer
-            blocks={blocks}
-            onRefreshBlocks={loadAllData}
-          />
-        )}
-
-        {activeTab === 'security' && (
-          <SecurityConsole
-            identities={identities}
-            activeDocs={activeDocs}
-            onSecurityUpdated={loadAllData}
-          />
-        )}
+          {activeTab === 'provenance' && (
+            <BlockchainExplorer
+              blocks={blocks}
+              onRefreshBlocks={loadAllData}
+            />
+          )}
+        </div>
       </main>
 
       <footer className="border-t border-slate-200/60 bg-white/40 py-3 text-center text-[11px] text-slate-400">

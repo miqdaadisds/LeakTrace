@@ -1,29 +1,29 @@
 import axios from 'axios';
 
-// Detect active backend endpoint (Electron preload, runtime override, environment variable, or central cloud default)
+// Detect active backend endpoint (Electron preload, runtime override, environment variable, or local enclave default)
+export const LOCAL_DEFAULT_BACKEND = 'http://127.0.0.1:8000';
 export const CENTRAL_DEFAULT_BACKEND = 'https://leaktrace-backend.onrender.com';
 
 function resolveDefaultApiUrl() {
   if (typeof window !== 'undefined' && window.electronAPI?.apiUrl) {
     return window.electronAPI.apiUrl;
   }
+  if (typeof window !== 'undefined' && window.electronAPI?.isElectron) {
+    return LOCAL_DEFAULT_BACKEND;
+  }
   if (typeof window !== 'undefined' && window.__TRACELEAK_API_URL__) {
     return window.__TRACELEAK_API_URL__;
   }
-  if (typeof window !== 'undefined' && window.__LEAKTRACE_API_URL__) {
-    return window.__LEAKTRACE_API_URL__;
-  }
   if (typeof window !== 'undefined') {
     const saved = localStorage.getItem('traceleak_api_url') || localStorage.getItem('leaktrace_api_url');
-    // If saved is an obsolete local url, ignore it unless forced offline
-    if (saved && !saved.includes('127.0.0.1') && !saved.includes('localhost')) {
+    if (saved) {
       return saved;
     }
   }
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL;
   }
-  return CENTRAL_DEFAULT_BACKEND;
+  return LOCAL_DEFAULT_BACKEND;
 }
 
 const defaultUrl = resolveDefaultApiUrl();
@@ -72,14 +72,26 @@ function authHeaders() {
 // ==========================================
 // 1. HEALTH & COLD-START RECOVERY
 // ==========================================
-export const checkHealthWithRetry = async (maxAttempts = 15, intervalMs = 2000) => {
+export const checkHealthWithRetry = async (maxAttempts = 6, intervalMs = 1500) => {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const res = await api.get('/health', { timeout: 5000 });
+      const res = await api.get('/health', { timeout: 4000 });
       if (res.status === 200) {
         return { online: true, data: res.data };
       }
     } catch (err) {
+      // If remote endpoint is not responding, seamlessly check local enclave at 127.0.0.1:8000
+      if (api.defaults.baseURL !== 'http://127.0.0.1:8000') {
+        try {
+          const localRes = await axios.get('http://127.0.0.1:8000/health', { timeout: 2000 });
+          if (localRes.status === 200) {
+            console.log('[TraceLeak] Seamlessly connected to local secure enclave at http://127.0.0.1:8000');
+            setApiBaseUrl('http://127.0.0.1:8000');
+            return { online: true, data: localRes.data };
+          }
+        } catch (_) {}
+      }
+
       if (attempt === maxAttempts) {
         return { online: false, error: err.message };
       }

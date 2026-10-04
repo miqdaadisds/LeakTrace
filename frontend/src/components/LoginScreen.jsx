@@ -263,6 +263,7 @@ export default function LoginScreen({ setupRequired, onLogin }) {
               <LogIn className="w-4 h-4 text-amber-400" />
               <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
             </button>
+
             <div className="flex justify-between items-center text-xs text-slate-600 pt-3 border-t border-slate-200/60">
               <button type="button" onClick={() => { setMode('register'); resetForm(); }} className="hover:text-amber-600 font-semibold transition-colors">Create Account</button>
               <button type="button" onClick={() => { setMode('recover'); resetForm(); }} className="hover:text-amber-600 font-semibold transition-colors">Forgot Password?</button>

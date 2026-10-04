@@ -216,6 +216,12 @@ async def download_protected_pdf(doc_id: str):
         meta = system_state.document_metadata.get(doc_id, {})
         filename = meta.get("original_filename", f"{doc_id}.pdf")
 
+    if not filename.endswith(".protected.pdf"):
+        if filename.lower().endswith(".pdf"):
+            filename = filename[:-4] + ".protected.pdf"
+        else:
+            filename = filename + ".protected.pdf"
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

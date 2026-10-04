@@ -76,6 +76,8 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
       playSuccess();
       setResult(res);
       if (onDecrypted) onDecrypted(res);
+      // Auto-trigger Save dialog so user directly saves the decrypted PDF
+      await handleSavePdf(res);
     } catch (err) {
       playError();
       setError(err.response?.data?.detail || 'Decryption denied. Check your passphrase.');
@@ -84,14 +86,42 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
     }
   };
 
-  const handleSavePdf = async () => {
-    if (!result?.watermarked_pdf_base64) return;
+  const handleSavePdf = async (overrideResult) => {
+    const targetResult = overrideResult || result;
+    if (!targetResult) return;
     playClick();
-    const defaultName = `Decrypted-${result.doc_id || 'Document'}-${user?.name?.replace(/\s+/g, '_') || 'Officer'}.pdf`;
+
+    const sourceBase = customFile?.name
+      ? customFile.name.replace(/\.pdf$/i, '').replace(/\.protected$/i, '')
+      : (targetResult.doc_id || 'Document');
+    const defaultName = `${sourceBase}.decrypted.pdf`;
+
     try {
+      let finalBase64 = targetResult.watermarked_pdf_base64;
+      if (!finalBase64 && targetResult.doc_id) {
+        const downloadUrl = `/api/recipient/download-decrypted-pdf/${targetResult.doc_id}/${user?.recipient_id || ''}`;
+        const blobResp = await fetch(downloadUrl);
+        if (blobResp.ok) {
+          const blobData = await blobResp.blob();
+          finalBase64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const r = reader.result;
+              resolve(typeof r === 'string' ? r.split(',')[1] : null);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blobData);
+          });
+        }
+      }
+
+      if (!finalBase64) {
+        throw new Error('No decrypted PDF bytes found');
+      }
+
       const res = await downloadFileToDisk({
         defaultFilename: defaultName,
-        base64Content: result.watermarked_pdf_base64,
+        base64Content: finalBase64,
         mimeType: 'application/pdf'
       });
       if (res && res.success && res.filePath) {

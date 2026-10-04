@@ -16,15 +16,9 @@ if (!app.isPackaged) {
   app.setPath('userData', userDataDir);
 }
 
-// Disable GPU acceleration and disk cache entirely to prevent lock errors on Windows
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu');
-app.commandLine.appendSwitch('disable-gpu-compositing');
-app.commandLine.appendSwitch('disable-gpu-rasterization');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-gpu-sandbox');
+// Enable standard Chromium GPU compositing for butter-smooth 60fps animations
 app.commandLine.appendSwitch('disk-cache-size', '0');
-app.commandLine.appendSwitch('no-sandbox');
+
 
 let mainWindow = null;
 let pythonProcess = null;
@@ -89,11 +83,16 @@ function startPythonBackend() {
       if (fs.existsSync(templateDb)) {
         try {
           fs.copyFileSync(templateDb, persistentDbPath);
+          fs.chmodSync(persistentDbPath, 0o666);
           console.log(`[TraceLeak] Seeded initial database to: ${persistentDbPath}`);
         } catch (e) {
           console.warn(`[TraceLeak] Failed to seed database: ${e.message}`);
         }
       }
+    } else {
+      try {
+        fs.chmodSync(persistentDbPath, 0o666);
+      } catch (_) {}
     }
 
     pythonProcess = spawn(
@@ -177,7 +176,17 @@ function createWindow() {
   // Handle native file downloads gracefully
   if (mainWindow.webContents.session) {
     mainWindow.webContents.session.on('will-download', (event, item) => {
-      console.log(`[TraceLeak] Incoming download: ${item.getFilename()}`);
+      const defaultFilename = item.getFilename();
+      const savePath = path.join(app.getPath('downloads'), defaultFilename);
+      item.setSavePath(savePath);
+      console.log(`[TraceLeak] Incoming download: ${defaultFilename} -> ${savePath}`);
+      item.once('done', (e, state) => {
+        if (state === 'completed') {
+          console.log(`[TraceLeak] Download finished successfully: ${savePath}`);
+        } else {
+          console.warn(`[TraceLeak] Download status: ${state}`);
+        }
+      });
     });
   }
 
@@ -237,8 +246,10 @@ ipcMain.handle('save-file-dialog', async (event, { defaultFilename, base64Conten
       fs.writeFileSync(filePath, buffer);
     } else if (textContent) {
       fs.writeFileSync(filePath, textContent, 'utf-8');
+    } else {
+      throw new Error('No content provided to save to disk');
     }
-    console.log(`[TraceLeak] File successfully saved: ${filePath}`);
+    console.log(`[TraceLeak] File successfully saved: ${filePath} (${fs.statSync(filePath).size} bytes)`);
     return { success: true, filePath };
   } catch (err) {
     console.error('[TraceLeak] Save file error:', err);
@@ -266,10 +277,9 @@ app.whenReady().then(async () => {
 
   if (isRemoteMode) {
     console.log(`[TraceLeak] Connected Mode: Active Central Backend configured at ${remoteApiUrl}`);
-    createWindow();
-    return;
   }
 
+  // Ensure local background worker is bootstrapped for local cryptographic operations
   try {
     let alreadyRunning = false;
     try {
@@ -283,19 +293,24 @@ app.whenReady().then(async () => {
     if (!alreadyRunning) {
       startPythonBackend();
       console.log('[TraceLeak] Awaiting Python backend initialization...');
-      await checkBackendHealth(30, 500);
-      console.log('[TraceLeak] Python backend is operational.');
+      if (!isRemoteMode) {
+        await checkBackendHealth(30, 500);
+        console.log('[TraceLeak] Python backend is operational.');
+      }
     }
-
-    createWindow();
   } catch (err) {
-    console.error('[TraceLeak] Failed to start background worker:', err);
-    dialog.showErrorBox(
-      'TraceLeak Enclave Startup Error',
-      `Failed to initialize local cryptographic worker: ${err.message}`
-    );
-    app.quit();
+    console.warn('[TraceLeak] Local worker startup note:', err.message);
+    if (!isRemoteMode) {
+      dialog.showErrorBox(
+        'TraceLeak Enclave Startup Error',
+        `Failed to initialize local cryptographic worker: ${err.message}`
+      );
+      app.quit();
+      return;
+    }
   }
+
+  createWindow();
 });
 
 app.on('activate', () => {

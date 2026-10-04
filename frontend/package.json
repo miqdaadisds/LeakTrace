@@ -1,7 +1,7 @@
 {
   "name": "traceleak",
   "productName": "TraceLeak",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "TraceLeak - Cryptographic Attribution & Immutable Decryption Provenance for Encrypted Document Distribution",
   "author": "Ministry of Defence / WESEE (SIH 2026)",
   "main": "electron/main.cjs",
@@ -76,10 +76,12 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": false,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "TraceLeak"
+      "shortcutName": "TraceLeak",
+      "uninstallDisplayName": "TraceLeak"
     }
   }
 }

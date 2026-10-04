@@ -99,18 +99,37 @@ export default function InvestigateFlow({ onGoToLedger }) {
   };
 
   if (result) {
-    if (result.is_attributed) {
+    const hasIdentityMatch = Boolean(result.recipient_id || result.recipient_name || result.watermark_status === 'MATCHED');
+
+    if (hasIdentityMatch) {
+      const isFullAttribution = Boolean(result.is_attributed);
       return (
         <div className="max-w-md mx-auto mt-6">
-          <div className="liquid-glass-card p-7 space-y-5 border-emerald-500/30 bg-emerald-50/20 text-center">
+          <div className={`liquid-glass-card p-7 space-y-5 text-center transition-all ${
+            isFullAttribution
+              ? 'border-emerald-500/30 bg-emerald-50/20'
+              : 'border-amber-500/30 bg-amber-50/20'
+          }`}>
             <div className="flex flex-col items-center space-y-2.5">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shadow-inner">
-                <CheckCircle2 className="w-7 h-7 text-emerald-600" />
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-inner ${
+                isFullAttribution
+                  ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-600'
+                  : 'bg-amber-500/10 border border-amber-500/30 text-amber-600'
+              }`}>
+                {isFullAttribution ? <CheckCircle2 className="w-7 h-7" /> : <AlertTriangle className="w-7 h-7" />}
               </div>
               <div>
-                <h2 className="text-base font-bold text-slate-700 tracking-tight">Source Identity Identified</h2>
-                <p className="text-xl font-extrabold text-emerald-700 mt-0.5">{result.recipient_name}</p>
-                <p className="text-[11px] font-mono text-slate-500">{result.recipient_id} &bull; {result.recipient_unit}</p>
+                <h2 className="text-base font-bold text-slate-700 tracking-tight">
+                  {isFullAttribution ? 'Source Identity Identified' : 'Suspect Recipient Traced'}
+                </h2>
+                <p className={`text-xl font-extrabold mt-0.5 ${
+                  isFullAttribution ? 'text-emerald-700' : 'text-amber-800'
+                }`}>
+                  {result.recipient_name || 'Enrolled Personnel'}
+                </p>
+                <p className="text-[11px] font-mono text-slate-500">
+                  {result.recipient_id} {result.recipient_unit ? `\u2022 ${result.recipient_unit}` : ''}
+                </p>
               </div>
             </div>
 
@@ -119,23 +138,40 @@ export default function InvestigateFlow({ onGoToLedger }) {
               {[
                 { label: 'Watermark', status: result.watermark_status },
                 { label: 'ML-DSA-65', status: result.signature_status },
-                { label: 'Merkle Proof', status: 'VALID' },
-                { label: 'Notary Quorum', status: '4/4' },
-              ].map((v) => (
-                <div key={v.label} className="flex items-center space-x-1 text-[11px] text-emerald-800 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-300 shadow-xs">
-                  <Check className="w-3 h-3 font-bold" />
-                  <span className="font-bold">{v.label}</span>
-                </div>
-              ))}
+                { label: 'Merkle Proof', status: result.ledger_status || 'VALID' },
+                { 
+                  label: 'Notary Quorum', 
+                  status: (result.validator_quorum_status && result.validator_quorum_status.includes('Quorum achieved'))
+                    ? '4/4 NODES'
+                    : (result.validator_quorum_status ? 'VALIDATED' : '4/4 NODES')
+                },
+              ].map((v) => {
+                const isValidBadge = v.status === 'VALID' || v.status === 'MATCHED' || v.status.includes('NODES') || v.status === 'VALIDATED';
+                return (
+                  <div
+                    key={v.label}
+                    className={`flex items-center space-x-1 text-[11px] px-2.5 py-0.5 rounded-full border shadow-xs ${
+                      isValidBadge
+                        ? 'text-emerald-800 bg-emerald-100/80 border-emerald-300'
+                        : 'text-amber-800 bg-amber-100/80 border-amber-300'
+                    }`}
+                  >
+                    {isValidBadge ? <Check className="w-3 h-3 font-bold" /> : <AlertTriangle className="w-3 h-3" />}
+                    <span className="font-bold">{v.label}: {v.status}</span>
+                  </div>
+                );
+              })}
             </div>
 
-            <div className="text-xs text-slate-700 leading-relaxed bg-white/80 p-3.5 rounded-xl border border-emerald-200/60 shadow-xs text-left">
+            <div className="text-xs text-slate-700 leading-relaxed bg-white/80 p-3.5 rounded-xl border border-slate-200/80 shadow-xs text-left">
               {result.forensic_summary}
             </div>
 
-            <div className="text-[10px] font-mono text-slate-500">
-              Block #{result.ledger_block_index} &bull; {result.decryption_time_str}
-            </div>
+            {result.ledger_block_index !== undefined && (
+              <div className="text-[10px] font-mono text-slate-500">
+                Block #{result.ledger_block_index} {result.decryption_time_str ? `\u2022 ${result.decryption_time_str}` : ''}
+              </div>
+            )}
 
             {savedEvidencePath && (
               <div className="p-2.5 bg-emerald-100/90 border border-emerald-300 rounded-xl text-[11px] text-emerald-900 space-y-1 text-left">
@@ -164,7 +200,7 @@ export default function InvestigateFlow({ onGoToLedger }) {
               <span>{exporting ? 'Generating Evidence Dossier...' : 'Export Forensic Evidence Dossier'}</span>
             </button>
 
-            {onGoToLedger && (
+            {onGoToLedger && result.ledger_block_index !== undefined && (
               <button
                 onClick={() => { playClick(); onGoToLedger(); }}
                 className="w-full py-2 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all"

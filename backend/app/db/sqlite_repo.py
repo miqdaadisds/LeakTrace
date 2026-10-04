@@ -16,6 +16,12 @@ class SQLiteRepository(BaseRepository):
             self.db_path = db_path
 
     def _get_connection(self):
+        if os.path.exists(self.db_path):
+            try:
+                import stat
+                os.chmod(self.db_path, stat.S_IWRITE | stat.S_IREAD)
+            except Exception:
+                pass
         conn = sqlite3.connect(self.db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute('PRAGMA journal_mode=WAL')
@@ -541,4 +547,11 @@ class SQLiteRepository(BaseRepository):
             conn.close()
 
     def is_setup_complete(self) -> bool:
-        return self.get_config('setup_complete') == 'true'
+        if self.get_config('setup_complete') != 'true':
+            return False
+        conn = self._get_connection()
+        try:
+            row = conn.execute("SELECT count(*) FROM identities WHERE role='admin'").fetchone()
+            return bool(row and row[0] > 0)
+        finally:
+            conn.close()

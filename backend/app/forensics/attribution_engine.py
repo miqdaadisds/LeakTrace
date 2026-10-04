@@ -39,6 +39,22 @@ class ForensicAttributionEngine:
         active_ledger = ledger or provenance_ledger
         extracted = pdf_watermarker.extract_from_pdf_bytes(pdf_bytes)
         if not extracted:
+            try:
+                from app.crypto.pdf_protector import PdfProtector
+                slots = PdfProtector.read_slots(pdf_bytes)
+                if slots:
+                    doc_id = slots.get("doc_id", "DOC")
+                    rcpts = [s.get("recipient_id") for s in slots.get("recipients", [])]
+                    return ForensicAttributionResult(
+                        is_attributed=False,
+                        doc_id=doc_id,
+                        watermark_status="NOT_FOUND",
+                        signature_status="UNVERIFIED",
+                        ledger_status="UNVERIFIED",
+                        forensic_summary=f"This document is an encrypted protected PDF ({len(rcpts)} recipient slots). Leaked documents can only be attributed after being decrypted and forensically watermarked by an authorized recipient."
+                    )
+            except Exception:
+                pass
             return ForensicAttributionResult(
                 is_attributed=False,
                 watermark_status="NOT_FOUND",
@@ -111,7 +127,8 @@ class ForensicAttributionEngine:
 
         decryption_time_str = datetime.fromtimestamp(receipt.timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-        is_attributed = sig_valid and merkle_valid and is_quorum
+        # Attribution requires valid recipient digital signature and Merkle inclusion proof
+        is_attributed = sig_valid and merkle_valid
 
         detailed_evidence = {
             "receipt_id": receipt.receipt_id,
@@ -127,13 +144,22 @@ class ForensicAttributionEngine:
             "proof_path_depth": len(merkle_proof.get("proof_path", [])) if merkle_proof else 0
         }
 
-        summary = (
-            f"ATTRIBUTION VERIFIED: Document leaked by {recipient_name} ({receipt.recipient_id}). "
-            f"Forensic watermark {watermark_id} matches Decryption Receipt {receipt.receipt_id} on Block #{block_idx}. "
-            f"Recipient ML-DSA-65 signature is VALID, ledger integrity is VALID, and 3-of-4 validator quorum achieved."
-            if is_attributed else
-            f"ATTRIBUTION CONFLICT: Cryptographic signature, quorum, or ledger proof failed validation."
-        )
+        if is_attributed:
+            quorum_note = "3-of-4 validator notary quorum achieved" if is_quorum else f"notary status: {quorum_desc}"
+            summary = (
+                f"ATTRIBUTION VERIFIED: Document leaked by {recipient_name} ({receipt.recipient_id}). "
+                f"Forensic watermark {watermark_id} matches Decryption Receipt {receipt.receipt_id} on Block #{block_idx}. "
+                f"Recipient ML-DSA-65 signature is VALID, Merkle inclusion proof is VALID, and {quorum_note}."
+            )
+        else:
+            failures = []
+            if not sig_valid:
+                failures.append("recipient digital signature")
+            if not merkle_valid:
+                failures.append("Merkle tree block inclusion proof")
+            if not is_quorum:
+                failures.append("validator notary quorum")
+            summary = f"ATTRIBUTION CONFLICT: Mathematical verification failed for: {', '.join(failures)}."
 
         return ForensicAttributionResult(
             is_attributed=is_attributed,

@@ -3,12 +3,28 @@
  * Uses Electron's native Save Dialog with fallback to standard browser download.
  */
 export async function downloadFileToDisk({ defaultFilename, base64Content, textContent, blob, mimeType = 'application/pdf' }) {
+  // Convert blob to base64 if needed for Electron native save
+  let resolvedBase64 = base64Content;
+  if (!resolvedBase64 && blob) {
+    try {
+      resolvedBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const r = reader.result;
+          resolve(typeof r === 'string' ? r.split(',')[1] : null);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (_) {}
+  }
+
   // 1. Electron Native Save Dialog
   if (typeof window !== 'undefined' && window.electronAPI?.saveFile) {
     try {
       const res = await window.electronAPI.saveFile({
         defaultFilename,
-        base64Content,
+        base64Content: resolvedBase64,
         textContent,
       });
       if (res && res.success) {

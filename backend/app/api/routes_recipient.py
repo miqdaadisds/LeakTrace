@@ -91,12 +91,15 @@ async def decrypt_package_endpoint(
     if not resolved_recipient_id:
         slots_data = PdfProtector.read_slots(protected_pdf_bytes)
         if slots_data and "recipients" in slots_data:
-            trailer_rids = [s.get("recipient_id") for s in slots_data["recipients"]]
+            trailer_rids = [s.get("recipient_id") for s in slots_data["recipients"] if s.get("recipient_id")]
             # Check enrolled identities in state or DB
             matching_ids = [rid for rid in trailer_rids if rid in system_state.identities]
-            if len(matching_ids) == 1:
-                resolved_recipient_id = matching_ids[0]
-            elif matching_ids:
+            if not matching_ids and middleware.db:
+                for rid in trailer_rids:
+                    row = middleware.db.get_identity(rid)
+                    if row:
+                        matching_ids.append(row["recipient_id"])
+            if matching_ids:
                 resolved_recipient_id = matching_ids[0]
 
     if not resolved_recipient_id:
@@ -128,9 +131,24 @@ async def decrypt_package_endpoint(
     elif middleware.db:
         user_row = middleware.db.get_identity(resolved_recipient_id)
         if user_row:
-            vault_raw = json.loads(user_row["encrypted_vault"].decode("utf-8"))
+            ev = user_row.get("encrypted_vault")
+            if isinstance(ev, (bytes, memoryview)):
+                vault_raw = json.loads(bytes(ev).decode("utf-8"))
+            elif isinstance(ev, str):
+                vault_raw = json.loads(ev)
+            elif isinstance(ev, dict):
+                vault_raw = ev
+            else:
+                vault_raw = {}
             encrypted_vault = vault_raw.get("primary", vault_raw)
-            pub_sig_b64 = base64.b64encode(user_row["public_key_sig"]).decode("utf-8")
+
+            pks = user_row.get("public_key_sig")
+            if isinstance(pks, (bytes, memoryview)):
+                pub_sig_b64 = base64.b64encode(bytes(pks)).decode("utf-8")
+            elif isinstance(pks, str):
+                pub_sig_b64 = pks
+            else:
+                pub_sig_b64 = ""
 
     if not encrypted_vault:
         raise HTTPException(

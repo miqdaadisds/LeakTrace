@@ -10,13 +10,12 @@ import {
   RefreshCw,
   FolderOpen
 } from 'lucide-react';
-import { protectDocument, getApiBaseUrl } from '../api';
+import { protectDocument, getApiBaseUrl, downloadProtectedDocument } from '../api';
 import { downloadFileToDisk, openFolderForFile } from '../utils/fileSaver';
 import { playClick, playSuccess, playError } from '../utils/soundEffects';
 
 export default function DocumentPublisher({ identities = [], activeDocs = [], onDocumentPublished, onGoToDecrypt }) {
   const [selectedFile, setSelectedFile] = useState(null);
-  const [title, setTitle] = useState('');
   const [selectedRecipients, setSelectedRecipients] = useState(
     identities.map((i) => i.recipient_id)
   );
@@ -35,8 +34,6 @@ export default function DocumentPublisher({ identities = [], activeDocs = [], on
     }
     setError(null);
     setSelectedFile(file);
-    const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-    setTitle(cleanName);
     playClick();
   };
 
@@ -48,6 +45,44 @@ export default function DocumentPublisher({ identities = [], activeDocs = [], on
       }
     } else {
       setSelectedRecipients([...selectedRecipients, id]);
+    }
+  };
+
+  const handleSaveToDisk = async (docId, fileName, base64Data) => {
+    playClick();
+    const cleanBase = (fileName || docId || 'document').replace(/\.pdf$/i, '').replace(/\.protected$/i, '');
+    const filename = `${cleanBase}.protected.pdf`;
+    try {
+      let finalBase64 = base64Data;
+      if (!finalBase64) {
+        // Fallback: fetch blob from backend download URL if base64Data wasn't returned
+        const blobData = await downloadProtectedDocument(docId);
+        finalBase64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const result = reader.result;
+            const b64 = typeof result === 'string' ? result.split(',')[1] : null;
+            resolve(b64);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blobData);
+        });
+      }
+      if (!finalBase64) {
+        throw new Error('No document content available to save');
+      }
+      const res = await downloadFileToDisk({
+        defaultFilename: filename,
+        base64Content: finalBase64,
+        mimeType: 'application/pdf'
+      });
+      if (res && res.success && res.filePath) {
+        playSuccess();
+        setSavedFilePath(res.filePath);
+      }
+    } catch (err) {
+      playError();
+      console.error('Save to disk error:', err);
     }
   };
 
@@ -69,7 +104,7 @@ export default function DocumentPublisher({ identities = [], activeDocs = [], on
     playClick();
 
     const formData = new FormData();
-    formData.append('title', title || selectedFile.name.replace(/\.[^/.]+$/, ''));
+    formData.append('title', selectedFile.name);
     formData.append('classification', 'CONFIDENTIAL');
     formData.append('recipient_ids', selectedRecipients.join(','));
     formData.append('file', selectedFile);
@@ -79,29 +114,13 @@ export default function DocumentPublisher({ identities = [], activeDocs = [], on
       playSuccess();
       setDistributionResult(res);
       if (onDocumentPublished) onDocumentPublished();
+      // Prompt Save Dialog directly with the protected document
+      await handleSaveToDisk(res.doc_id, selectedFile.name, res.protected_pdf_base64);
     } catch (err) {
       playError();
       setError(err.response?.data?.detail || 'Document distribution failed.');
     } finally {
       setIsEncrypting(false);
-    }
-  };
-
-  const handleSaveToDisk = async (docId, docTitle, base64Data) => {
-    playClick();
-    const filename = `${docTitle || docId}.pdf`;
-    try {
-      const res = await downloadFileToDisk({
-        defaultFilename: filename,
-        base64Content: base64Data,
-        mimeType: 'application/pdf'
-      });
-      if (res && res.success && res.filePath) {
-        playSuccess();
-        setSavedFilePath(res.filePath);
-      }
-    } catch (_) {
-      playError();
     }
   };
 
@@ -186,7 +205,7 @@ export default function DocumentPublisher({ identities = [], activeDocs = [], on
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setSelectedFile(null); setTitle(''); }}
+                    onClick={() => { setSelectedFile(null); }}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                     title="Remove file"
                   >
@@ -196,23 +215,7 @@ export default function DocumentPublisher({ identities = [], activeDocs = [], on
               )}
             </div>
 
-            {/* 2. Optional Title (Auto-populated from file) */}
-            {selectedFile && (
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 block">
-                  Document Title
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Strategic Product Roadmap"
-                  className="w-full bg-white/85 border border-slate-200/90 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-xs"
-                />
-              </div>
-            )}
-
-            {/* 3. Recipient Selection */}
+            {/* 2. Recipient Selection */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold text-slate-800">

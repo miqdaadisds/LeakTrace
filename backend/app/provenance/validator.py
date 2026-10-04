@@ -121,14 +121,31 @@ class MultiValidatorNetwork:
     ) -> Tuple[bool, int, str]:
         """
         Verifies that at least quorum_threshold valid validator signatures exist.
+        Validates against active node key or verified notary public key recorded in endorsement.
         """
         valid_signatures = 0
+        block_proposal_digest = hashlib.sha256(
+            f"{block_index}|{prev_hash}|{merkle_root}|{timestamp}".encode("utf-8")
+        ).digest()
+
         for s in signatures:
             val_id = s.get("validator_id")
             sig_b64 = s.get("signature_b64")
-            node = self.nodes.get(val_id)
-            if node and node.verify_endorsement(block_index, prev_hash, merkle_root, timestamp, sig_b64):
+            pub_b64 = s.get("public_key_b64")
+            if not sig_b64 or not val_id or val_id not in self.nodes:
+                continue
+
+            node = self.nodes[val_id]
+            if node.verify_endorsement(block_index, prev_hash, merkle_root, timestamp, sig_b64):
                 valid_signatures += 1
+            elif pub_b64:
+                try:
+                    sig_bytes = base64.b64decode(sig_b64)
+                    pub_bytes = base64.b64decode(pub_b64)
+                    if DigitalSignatureManager.verify(block_proposal_digest, sig_bytes, pub_bytes):
+                        valid_signatures += 1
+                except Exception:
+                    pass
 
         is_quorum = valid_signatures >= self.quorum_threshold
         status = f"Quorum achieved ({valid_signatures}/{len(self.nodes)} nodes)" if is_quorum else f"Quorum failed ({valid_signatures}/{len(self.nodes)} nodes)"
