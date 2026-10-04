@@ -7,11 +7,14 @@ function resolveDefaultApiUrl() {
   if (typeof window !== 'undefined' && window.electronAPI?.apiUrl) {
     return window.electronAPI.apiUrl;
   }
+  if (typeof window !== 'undefined' && window.__TRACELEAK_API_URL__) {
+    return window.__TRACELEAK_API_URL__;
+  }
   if (typeof window !== 'undefined' && window.__LEAKTRACE_API_URL__) {
     return window.__LEAKTRACE_API_URL__;
   }
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('leaktrace_api_url');
+    const saved = localStorage.getItem('traceleak_api_url') || localStorage.getItem('leaktrace_api_url');
     // If saved is an obsolete local url, ignore it unless forced offline
     if (saved && !saved.includes('127.0.0.1') && !saved.includes('localhost')) {
       return saved;
@@ -39,6 +42,7 @@ export function setApiBaseUrl(url) {
     const cleanUrl = url.trim().replace(/\/+$/, '');
     api.defaults.baseURL = cleanUrl;
     if (typeof window !== 'undefined') {
+      localStorage.setItem('traceleak_api_url', cleanUrl);
       localStorage.setItem('leaktrace_api_url', cleanUrl);
     }
   }

@@ -199,7 +199,8 @@ async def decrypt_package_endpoint(
         "receipt": dec_res.receipt.model_dump(),
         "pdf_download_url": f"/api/recipient/download-decrypted-pdf/{dec_res.receipt.doc_id}/{dec_res.receipt.recipient_id}",
         "receipt_download_url": f"/api/recipient/download-provenance-receipt/{dec_res.receipt.doc_id}/{dec_res.receipt.recipient_id}",
-        "watermarked_pdf_base64": base64.b64encode(dec_res.watermarked_pdf_bytes).decode("utf-8")
+        "watermarked_pdf_base64": base64.b64encode(dec_res.watermarked_pdf_bytes).decode("utf-8"),
+        "receipt_json_str": json.dumps(dec_res.receipt.model_dump(), indent=2)
     }
 
 

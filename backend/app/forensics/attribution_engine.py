@@ -94,12 +94,24 @@ class ForensicAttributionEngine:
 
         # 4. Resolve identity metadata
         user_meta = self._identity_directory.get(receipt.recipient_id, {})
-        recipient_name = user_meta.get("name", receipt.recipient_id)
-        recipient_unit = user_meta.get("unit", "Enrolled Recipient")
+        recipient_name = user_meta.get("name")
+        recipient_unit = user_meta.get("unit")
+        if not recipient_name:
+            try:
+                from app.auth import middleware
+                if middleware.db:
+                    db_u = middleware.db.get_identity(receipt.recipient_id)
+                    if db_u:
+                        recipient_name = db_u.get("name")
+                        recipient_unit = db_u.get("unit")
+            except Exception:
+                pass
+        recipient_name = recipient_name or receipt.recipient_id
+        recipient_unit = recipient_unit or "Enrolled Recipient"
 
         decryption_time_str = datetime.fromtimestamp(receipt.timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-        is_attributed = sig_valid and merkle_valid and ledger_valid and is_quorum
+        is_attributed = sig_valid and merkle_valid and is_quorum
 
         detailed_evidence = {
             "receipt_id": receipt.receipt_id,

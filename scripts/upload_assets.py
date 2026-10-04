@@ -40,23 +40,26 @@ def upload_assets():
     print(f"Found release '{release['name']}' (ID: {release_id})")
     
     assets = [
-        ("LeakTrace-1.1.0.msi", os.path.abspath("releases/LeakTrace 1.1.0.msi"), "application/x-msi"),
-        ("LeakTrace-Setup-1.1.0.exe", os.path.abspath("releases/LeakTrace Setup 1.1.0.exe"), "application/octet-stream")
+        ("TraceLeak-1.1.0.msi", os.path.abspath("releases/TraceLeak 1.1.0.msi"), "application/x-msi"),
+        ("TraceLeak-Setup-1.1.0.exe", os.path.abspath("releases/TraceLeak Setup 1.1.0.exe"), "application/octet-stream")
     ]
     
     for asset_name, asset_path, mime_type in assets:
-        for existing in release.get("assets", []):
-            if existing["name"] == asset_name:
-                print(f"Deleting older asset '{asset_name}' (ID: {existing['id']})...")
-                with httpx.Client(timeout=30.0) as client:
-                    del_res = client.delete(f"https://api.github.com/repos/{repo}/releases/assets/{existing['id']}", headers=headers)
-                    print(f"Delete response: {del_res.status_code}")
-            
         if not os.path.exists(asset_path):
             print(f"File not found: {asset_path}")
             continue
-            
+
         size = os.path.getsize(asset_path)
+        existing_match = next((a for a in release.get("assets", []) if a["name"] == asset_name), None)
+        if existing_match and existing_match.get("size") == size:
+            print(f"Asset '{asset_name}' already uploaded and size matches ({size / (1024*1024):.1f} MB). Skipping.")
+            continue
+
+        if existing_match:
+            print(f"Deleting older/partial asset '{asset_name}' (ID: {existing_match['id']})...")
+            with httpx.Client(timeout=30.0) as client:
+                client.delete(f"https://api.github.com/repos/{repo}/releases/assets/{existing_match['id']}", headers=headers)
+
         print(f"\nUploading {asset_name} ({size / (1024*1024):.1f} MB)...")
         
         upload_url = f"{upload_url_template}?name={asset_name}"
@@ -66,19 +69,22 @@ def upload_assets():
             "Content-Length": str(size)
         }
         
-        # Stream file in binary mode with generous timeout
+        def read_chunks(p, chunk_sz=2 * 1024 * 1024):
+            with open(p, "rb") as f:
+                while True:
+                    chunk = f.read(chunk_sz)
+                    if not chunk:
+                        break
+                    yield chunk
+
         success = False
         for attempt in range(1, 4):
             try:
                 print(f"Attempt {attempt}/3...")
-                with open(asset_path, "rb") as f:
-                    file_bytes = f.read()
-                    
-                # Use httpx with 10-minute timeout for large binary file
-                with httpx.Client(timeout=httpx.Timeout(600.0, connect=60.0)) as upload_client:
+                with httpx.Client(timeout=httpx.Timeout(1800.0, connect=120.0, read=1800.0, write=1800.0)) as upload_client:
                     upload_res = upload_client.post(
                         upload_url,
-                        content=file_bytes,
+                        content=read_chunks(asset_path),
                         headers=upload_headers
                     )
                     
@@ -90,7 +96,6 @@ def upload_assets():
                     break
                 else:
                     print(f"Upload failed (status {upload_res.status_code}): {upload_res.text}")
-                    # If duplicate or incomplete asset exists, delete it before retry
                     time.sleep(5)
             except Exception as e:
                 print(f"Exception during upload: {e}")

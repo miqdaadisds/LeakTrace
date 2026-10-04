@@ -1,9 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
-title LeakTrace - Cryptographic Attribution and Provenance System (SIH26237)
+title TraceLeak - Cryptographic Attribution and Provenance System (SIH26237)
 
 echo ===============================================================================
-echo  LeakTrace: Cryptographic Attribution and Provenance System (SIH26237)
+echo  TraceLeak: Cryptographic Attribution and Provenance System (SIH26237)
 echo  Ministry of Defence / WESEE
 echo ===============================================================================
 echo.
@@ -30,5 +30,5 @@ if not exist "dist\index.html" (
     )
 )
 
-echo Starting LeakTrace standalone desktop application using pinned local runtime...
+echo Starting TraceLeak standalone desktop application using pinned local runtime...
 call "node_modules\.bin\electron.cmd" electron\main.cjs

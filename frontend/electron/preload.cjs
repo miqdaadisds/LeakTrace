@@ -8,4 +8,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   platform: process.platform,
   isElectron: true,
   apiUrl: resolvedApiUrl,
+  saveFile: (options) => ipcRenderer.invoke('save-file-dialog', options),
+  showInFolder: (filePath) => ipcRenderer.invoke('show-in-folder', filePath),
 });

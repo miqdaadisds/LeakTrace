@@ -186,7 +186,8 @@ async def protect_document(
         "recipients_count": len(rcpt_list),
         "authorized_recipients": rcpt_list,
         "protected_pdf_size": len(protected_pdf),
-        "download_url": f"/api/distribution/download/{doc_id}"
+        "download_url": f"/api/distribution/download/{doc_id}",
+        "protected_pdf_base64": base64.b64encode(protected_pdf).decode("utf-8")
     }
 
 

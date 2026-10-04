@@ -52,7 +52,7 @@ export default function LoginScreen({ setupRequired, onLogin }) {
     try {
       const res = await register(name, unit, password);
       setGeneratedRecoveryKey(res.recovery_key);
-      setMessage("Account created. An administrator must approve your account before you can use LeakTrace.");
+      setMessage("Account created. An administrator must approve your account before you can use TraceLeak.");
     } catch (err) {
       setError(err.response?.data?.detail || 'Registration failed');
     } finally {
@@ -102,7 +102,7 @@ export default function LoginScreen({ setupRequired, onLogin }) {
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="apple-glass-card max-w-md w-full p-8 space-y-6">
           <div className="text-center space-y-2">
-            <img src={logo} alt="LeakTrace" className="w-16 h-16 mx-auto object-contain drop-shadow-md" />
+            <img src={logo} alt="TraceLeak" className="w-16 h-16 mx-auto object-contain drop-shadow-md" />
             <h2 className="text-xl font-bold text-slate-900">Save Your Recovery Key</h2>
             <p className="text-xs text-slate-500">
               This secret key is required to restore your identity or reset your password.
@@ -148,16 +148,16 @@ export default function LoginScreen({ setupRequired, onLogin }) {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="apple-glass-card max-w-md w-full p-8 space-y-6">
         <div className="text-center space-y-2">
-          <img src={logo} alt="LeakTrace" className="w-20 h-20 mx-auto object-contain drop-shadow-md mb-1" />
+          <img src={logo} alt="TraceLeak" className="w-20 h-20 mx-auto object-contain drop-shadow-md mb-1" />
           <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-            {mode === 'setup' && 'Set Up LeakTrace'}
-            {mode === 'login' && 'LeakTrace'}
+            {mode === 'setup' && 'Set Up TraceLeak'}
+            {mode === 'login' && 'TraceLeak'}
             {mode === 'register' && 'Create Account'}
             {mode === 'recover' && 'Recover Account'}
           </h1>
           <p className="text-xs font-medium text-slate-500">
             {mode === 'setup' && 'Create the first organization administrator'}
-            {mode === 'login' && 'Sign in with your LeakTrace credentials'}
+            {mode === 'login' && 'Sign in with your TraceLeak credentials'}
             {mode === 'register' && 'Register a new recipient identity'}
             {mode === 'recover' && 'Reset your password using your Recovery Key'}
           </p>
@@ -243,7 +243,7 @@ export default function LoginScreen({ setupRequired, onLogin }) {
               <div className="relative">
                 <input 
                   type={showPassword ? "text" : "password"} 
-                  placeholder="Enter your LeakTrace password" 
+                  placeholder="Enter your TraceLeak password" 
                   value={password} 
                   onChange={e => setPassword(e.target.value)} 
                   className={`${inputClass} pr-11`} 

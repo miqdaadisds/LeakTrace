@@ -21,9 +21,9 @@ def publish():
         
     repo = "miqdaadisds/LeakTrace"
     tag = "v1.1"
-    title = "LeakTrace v1.1.0 — Connected Multi-Client Cloud Release"
+    title = "TraceLeak v1.1.0 — Connected Multi-Client Cloud Release"
     body = (
-        "## LeakTrace v1.1.0: Connected Multi-Client Cryptographic Enclave\n\n"
+        "## TraceLeak v1.1.0: Connected Multi-Client Cryptographic Enclave\n\n"
         "Official Connected Cloud Release for SIH 2026 Problem Statement No. 237 (ID: 26237) — Ministry of Defence / WESEE.\n\n"
         "### Key Highlights in v1.1.0:\n"
         "- **Connected Multi-Client Architecture:** Enables real-time coordination across devices anywhere via central FastAPI backend on Render (`https://leaktrace-backend.onrender.com`) and centralized PostgreSQL on Supabase.\n"
@@ -31,10 +31,11 @@ def publish():
         "- **Zero-Password Challenge Login:** Authentication uses cryptographic challenge nonces signed locally with ML-DSA-65 signatures. Passwords never traverse the network.\n"
         "- **Single Shared Protected PDF:** O(1) single shared AES-256 encrypted PDF with recipient KEM slots. All authorized users download the identical binary file.\n"
         "- **Dynamic Forensic Watermarking:** Imperceptible watermarks injected on local decryption; decryption events generate non-repudiable ML-DSA-65 receipts anchored to the permissioned blockchain ledger.\n"
+        "- **Native Windows File Downloads:** Decrypted and protected PDF files land directly in the user-selected filesystem directory with 1-click 'Show in Windows Explorer' reveal.\n"
         "- **Full Air-Gapped Dual-Mode:** Offline SQLite mode remains fully functional for air-gapped environments.\n\n"
         "### Installer Downloads:\n"
-        "- **`LeakTrace 1.1.0.msi`**: Official Microsoft Windows Installer Package (181 MB)\n"
-        "- **`LeakTrace Setup 1.1.0.exe`**: Standalone Windows Setup Wizard with Desktop & Start Menu Shortcuts (169 MB)\n"
+        "- **`TraceLeak-1.1.0.msi`**: Official Microsoft Windows Installer Package (181 MB)\n"
+        "- **`TraceLeak-Setup-1.1.0.exe`**: Standalone Windows Setup Wizard with Desktop & Start Menu Shortcuts (169 MB)\n"
     )
     
     # 1. Create or get existing release
@@ -42,7 +43,7 @@ def publish():
     headers = {
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
-        "User-Agent": "LeakTrace-Release-Bot"
+        "User-Agent": "TraceLeak-Release-Bot"
     }
     
     # Check if release already exists
@@ -53,6 +54,13 @@ def publish():
         with urllib.request.urlopen(req) as resp:
             release = json.loads(resp.read().decode('utf-8'))
             print(f"Found existing release ID: {release['id']}")
+            # Update existing release title and body
+            patch_url = f"{url}/{release['id']}"
+            patch_data = json.dumps({"name": title, "body": body}).encode('utf-8')
+            patch_req = urllib.request.Request(patch_url, data=patch_data, headers={**headers, "Content-Type": "application/json"}, method="PATCH")
+            with urllib.request.urlopen(patch_req) as p_resp:
+                release = json.loads(p_resp.read().decode('utf-8'))
+                print(f"Updated release metadata for ID: {release['id']}")
     except urllib.error.HTTPError as e:
         if e.code == 404:
             pass

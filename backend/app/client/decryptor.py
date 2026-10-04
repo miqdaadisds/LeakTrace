@@ -80,7 +80,7 @@ class LocalRecipientDecryptor:
         # 1. Read trailer slots (no password needed)
         slots_data = PdfProtector.read_slots(protected_pdf_bytes)
         if slots_data is None:
-            raise ValueError("Not a LeakTrace protected PDF: no recipient trailer found")
+            raise ValueError("Not a TraceLeak protected PDF: no recipient trailer found")
 
         doc_id = slots_data.get("doc_id", "UNKNOWN")
         title = slots_data.get("title", "")

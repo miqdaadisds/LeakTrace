@@ -1,8 +1,8 @@
 {
-  "name": "leaktrace",
-  "productName": "LeakTrace",
+  "name": "traceleak",
+  "productName": "TraceLeak",
   "version": "1.1.0",
-  "description": "LeakTrace - Cryptographic Attribution & Immutable Decryption Provenance for Encrypted Document Distribution",
+  "description": "TraceLeak - Cryptographic Attribution & Immutable Decryption Provenance for Encrypted Document Distribution",
   "author": "Ministry of Defence / WESEE (SIH 2026)",
   "main": "electron/main.cjs",
   "type": "module",
@@ -34,8 +34,8 @@
     "vite": "6.1.0"
   },
   "build": {
-    "appId": "in.gov.defence.wesee.leaktrace",
-    "productName": "LeakTrace",
+    "appId": "in.gov.defence.wesee.traceleak",
+    "productName": "TraceLeak",
     "directories": {
       "output": "release"
     },
@@ -72,14 +72,14 @@
     },
     "msi": {
       "oneClick": false,
-      "shortcutName": "LeakTrace"
+      "shortcutName": "TraceLeak"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "LeakTrace"
+      "shortcutName": "TraceLeak"
     }
   }
 }

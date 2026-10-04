@@ -1,5 +1,5 @@
 """
-LeakTrace: Cryptographic Attribution & Immutable Decryption Provenance for Multi-Recipient Encrypted Document Distribution
+TraceLeak: Cryptographic Attribution & Immutable Decryption Provenance for Multi-Recipient Encrypted Document Distribution
 Smart India Hackathon (SIH) 2026 - Problem Statement No. 237 (ID: 26237).
 Organization: Ministry of Defence (WESEE).
 
@@ -40,7 +40,7 @@ provenance_ledger.db = database
 system_state.sync_from_db(database)
 
 app = FastAPI(
-    title="LeakTrace: Cryptographic Attribution & Provenance System",
+    title="TraceLeak: Cryptographic Attribution & Provenance System",
     description=(
         "Production-grade implementation for SIH 2026 Problem Statement #26237 "
         "(Ministry of Defence - WESEE). Features NIST FIPS 203 ML-KEM-768 hybrid envelope "
@@ -75,7 +75,7 @@ app.include_router(security_router)
 @app.get("/api/system/info")
 def system_info():
     return {
-        "system": "LeakTrace Cryptographic Attribution & Provenance Enclave",
+        "system": "TraceLeak Cryptographic Attribution & Provenance Enclave",
         "sih_problem_statement": "SIH 2026 PS No. 237 (ID: 26237)",
         "organization": "Ministry of Defence / WESEE",
         "theme": "Blockchain & Post-Quantum Cybersecurity",
@@ -96,7 +96,7 @@ def system_info():
 def system_status():
     is_valid, msg, _ = provenance_ledger.verify_chain_integrity()
     return {
-        "system": "LeakTrace",
+        "system": "TraceLeak",
         "status": "ONLINE",
         "pqc_kem_algorithm": "NIST FIPS 203 ML-KEM-768",
         "pqc_sig_algorithm": "NIST FIPS 204 ML-DSA-65",
@@ -115,7 +115,7 @@ def health_check():
     """Lightweight Render cold-start and health check endpoint."""
     return {
         "status": "healthy",
-        "service": "LeakTrace Enclave",
+        "service": "TraceLeak Enclave",
         "mode": "connected" if getattr(database, "database_url", None) else "offline",
         "timestamp": time.time()
     }
@@ -157,7 +157,7 @@ def root_events_poll(since: float = 0.0):
 def enclave_root():
     return {
         "status": "online",
-        "service": "LeakTrace Cryptographic Attribution & Provenance Enclave",
+        "service": "TraceLeak Cryptographic Attribution & Provenance Enclave",
         "version": "2.0.0",
         "health": "/health",
         "system_status": "/api/system/status",

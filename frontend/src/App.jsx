@@ -126,7 +126,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center space-y-4">
         <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-sm font-semibold text-slate-300">Connecting to LeakTrace Security Enclave...</p>
+        <p className="text-sm font-semibold text-slate-300">Connecting to TraceLeak Security Enclave...</p>
       </div>
     );
   }
@@ -212,7 +212,7 @@ export default function App() {
       </main>
 
       <footer className="border-t border-slate-200/60 bg-white/40 py-3 text-center text-[11px] text-slate-400">
-        LeakTrace &bull; SIH 2026 &bull; Ministry of Defence / WESEE
+        TraceLeak &bull; SIH 2026 &bull; Ministry of Defence / WESEE
       </footer>
     </div>
   );

@@ -1,31 +1,47 @@
 import React, { useState } from 'react';
 import { 
-  Send, 
-  FileCheck, 
-  Check, 
   Lock, 
-  FileText, 
   Upload, 
-  ShieldAlert, 
   Download, 
   ArrowRight, 
-  RefreshCw 
+  CheckCircle2, 
+  FileText, 
+  X,
+  RefreshCw,
+  FolderOpen
 } from 'lucide-react';
 import { protectDocument, getApiBaseUrl } from '../api';
-import axios from 'axios';
+import { downloadFileToDisk, openFolderForFile } from '../utils/fileSaver';
+import { playClick, playSuccess, playError } from '../utils/soundEffects';
 
-export default function DocumentPublisher({ identities, activeDocs, onDocumentPublished, onGoToDecrypt }) {
-  const [title, setTitle] = useState('Confidential Q4 Strategic Product Roadmap');
-  const [classification, setClassification] = useState('CONFIDENTIAL // RESTRICTED');
+export default function DocumentPublisher({ identities = [], activeDocs = [], onDocumentPublished, onGoToDecrypt }) {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [title, setTitle] = useState('');
   const [selectedRecipients, setSelectedRecipients] = useState(
     identities.map((i) => i.recipient_id)
   );
-  const [customFile, setCustomFile] = useState(null);
   const [isEncrypting, setIsEncrypting] = useState(false);
   const [distributionResult, setDistributionResult] = useState(null);
+  const [savedFilePath, setSavedFilePath] = useState(null);
   const [error, setError] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleFileSelection = (file) => {
+    if (!file) return;
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      playError();
+      setError('Only PDF files are supported.');
+      return;
+    }
+    setError(null);
+    setSelectedFile(file);
+    const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+    setTitle(cleanName);
+    playClick();
+  };
 
   const toggleRecipient = (id) => {
+    playClick();
     if (selectedRecipients.includes(id)) {
       if (selectedRecipients.length > 1) {
         setSelectedRecipients(selectedRecipients.filter((r) => r !== id));
@@ -37,62 +53,76 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
 
   const handleProtectAndDistribute = async (e) => {
     e.preventDefault();
-    if (!title || selectedRecipients.length === 0) {
-      setError('Please provide a document title and select at least one recipient.');
+    if (!selectedFile) {
+      playError();
+      setError('Please select or drop a PDF document to encrypt.');
       return;
     }
+    if (selectedRecipients.length === 0) {
+      playError();
+      setError('Please select at least one recipient.');
+      return;
+    }
+
     setIsEncrypting(true);
     setError(null);
+    playClick();
 
     const formData = new FormData();
-    formData.append('title', title);
-    formData.append('classification', classification);
+    formData.append('title', title || selectedFile.name.replace(/\.[^/.]+$/, ''));
+    formData.append('classification', 'CONFIDENTIAL');
     formData.append('recipient_ids', selectedRecipients.join(','));
-    if (customFile) {
-      formData.append('file', customFile);
-    }
+    formData.append('file', selectedFile);
 
     try {
       const res = await protectDocument(formData);
+      playSuccess();
       setDistributionResult(res);
       if (onDocumentPublished) onDocumentPublished();
     } catch (err) {
+      playError();
       setError(err.response?.data?.detail || 'Document distribution failed.');
     } finally {
       setIsEncrypting(false);
     }
   };
 
-  const downloadFile = async (docId, title) => {
+  const handleSaveToDisk = async (docId, docTitle, base64Data) => {
+    playClick();
+    const filename = `${docTitle || docId}.pdf`;
     try {
-      const res = await axios.get(`${getApiBaseUrl()}/api/distribution/download/${docId}`, {
-        responseType: 'blob',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}` // assuming token is somewhere, actually we should use api.downloadProtectedDocument
-        }
+      const res = await downloadFileToDisk({
+        defaultFilename: filename,
+        base64Content: base64Data,
+        mimeType: 'application/pdf'
       });
-      // But we can just use the download url returned by the API if we don't have it directly. Wait, the API returns a doc_id.
-    } catch (err) {}
+      if (res && res.success && res.filePath) {
+        playSuccess();
+        setSavedFilePath(res.filePath);
+      }
+    } catch (_) {
+      playError();
+    }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Distribution Form */}
+        {/* Left Column: Primary Studio */}
         <div className="lg:col-span-7 space-y-5">
           <form onSubmit={handleProtectAndDistribute} className="liquid-glass-card p-6 sm:p-7 space-y-5">
             <div className="flex items-center justify-between pb-3.5 border-b border-slate-200/60">
               <div>
                 <h2 className="text-base font-extrabold text-slate-900 flex items-center space-x-2 tracking-tight">
-                  <Lock className="w-4.5 h-4.5 text-blue-600" />
+                  <Lock className="w-4 h-4 text-blue-600" />
                   <span>Encrypt & Distribute Studio</span>
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Encrypt document ONCE with AES-256 and wrap access slots for multiple authorized recipients using ML-KEM-768.
+                  Encrypt document once with AES-256 and wrap access slots using ML-KEM-768.
                 </p>
               </div>
               <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-700 border border-blue-500/20 shadow-xs">
-                O(1) AES-256
+                Post-Quantum
               </span>
             </div>
 
@@ -102,165 +132,234 @@ export default function DocumentPublisher({ identities, activeDocs, onDocumentPu
               </div>
             )}
 
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+            {/* 1. Primary Action: File Upload Dropzone (REQUIRED) */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-800 block">
+                Source Document <span className="text-red-500">*</span>
+              </label>
+
+              {!selectedFile ? (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragging(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      handleFileSelection(e.dataTransfer.files[0]);
+                    }
+                  }}
+                  className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-200 cursor-pointer ${
+                    isDragging
+                      ? 'border-blue-500 bg-blue-50/60 scale-[1.01]'
+                      : 'border-slate-300 hover:border-blue-400 bg-white/60 hover:bg-white/90'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={(e) => handleFileSelection(e.target.files?.[0])}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  <div className="flex flex-col items-center justify-center space-y-2">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center shadow-xs">
+                      <Upload className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">
+                        Drop your PDF document here, or <span className="text-blue-600 underline">browse</span>
+                      </p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Supports authentic PDF documents up to 50MB</p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 bg-white/90 border border-slate-200/90 rounded-2xl flex items-center justify-between shadow-xs">
+                  <div className="flex items-center space-x-3 truncate">
+                    <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div className="truncate">
+                      <p className="text-xs font-bold text-slate-900 truncate">{selectedFile.name}</p>
+                      <p className="text-[10px] text-slate-500">{(selectedFile.size / 1024).toFixed(1)} KB &bull; Ready to encrypt</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedFile(null); setTitle(''); }}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    title="Remove file"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 2. Optional Title (Auto-populated from file) */}
+            {selectedFile && (
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700 block">
                   Document Title
                 </label>
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-white/70 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  required
+                  placeholder="e.g. Strategic Product Roadmap"
+                  className="w-full bg-white/85 border border-slate-200/90 rounded-xl px-3.5 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-xs"
                 />
               </div>
+            )}
 
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Security Classification
+            {/* 3. Recipient Selection */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800">
+                  Authorized Recipients ({selectedRecipients.length} of {identities.length})
                 </label>
-                <select
-                  value={classification}
-                  onChange={(e) => setClassification(e.target.value)}
-                  className="w-full bg-white/70 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="CONFIDENTIAL // RESTRICTED">CONFIDENTIAL // RESTRICTED</option>
-                  <option value="SECRET // DEFENCE ONLY">SECRET // DEFENCE ONLY</option>
-                  <option value="TOP SECRET // OPERATIONAL">TOP SECRET // OPERATIONAL</option>
-                </select>
-              </div>
-
-              {/* Upload Optional Custom PDF */}
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Upload PDF Document (Optional)
-                </label>
-                <div className="relative border-2 border-dashed border-slate-200 rounded-xl p-3 bg-white/50 text-center hover:bg-white/80 transition-colors">
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={(e) => setCustomFile(e.target.files[0] || null)}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <div className="flex items-center justify-center space-x-2 text-slate-600 text-xs">
-                    <Upload className="w-4 h-4 text-blue-600" />
-                    <span>{customFile ? customFile.name : 'Click to upload custom PDF (or use default generated memo)'}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Authorized Recipients Selection */}
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-2">
-                  Select Authorized Recipients ({selectedRecipients.length} of {identities.length})
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                  {identities.map((identity) => {
-                    const isSelected = selectedRecipients.includes(identity.recipient_id);
-                    return (
-                      <div
-                        key={identity.recipient_id}
-                        onClick={() => toggleRecipient(identity.recipient_id)}
-                        className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                          isSelected
-                            ? 'bg-blue-50/80 border-blue-300 shadow-sm'
-                            : 'bg-white/50 border-slate-200/80 opacity-60 hover:opacity-100'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-bold text-xs text-slate-900">{identity.name}</span>
-                          {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 font-bold" />}
-                        </div>
-                        <div className="text-[10px] text-slate-500 font-mono">{identity.recipient_id}</div>
-                      </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playClick();
+                    setSelectedRecipients(
+                      selectedRecipients.length === identities.length
+                        ? [identities[0]?.recipient_id]
+                        : identities.map((i) => i.recipient_id)
                     );
-                  })}
-                </div>
+                  }}
+                  className="text-[11px] font-semibold text-blue-600 hover:underline"
+                >
+                  {selectedRecipients.length === identities.length ? 'Deselect All' : 'Select All'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                {identities.map((ident) => {
+                  const isSelected = selectedRecipients.includes(ident.recipient_id);
+                  return (
+                    <div
+                      key={ident.recipient_id}
+                      onClick={() => toggleRecipient(ident.recipient_id)}
+                      className={`p-2.5 rounded-xl border text-xs cursor-pointer transition-all duration-200 select-none ${
+                        isSelected
+                          ? 'bg-blue-50/80 border-blue-300 text-blue-900 font-semibold shadow-xs'
+                          : 'bg-white/60 border-slate-200/80 text-slate-600 hover:bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="truncate">{ident.name}</span>
+                        {isSelected && <span className="text-blue-600 font-bold">&bull;</span>}
+                      </div>
+                      <span className="text-[10px] text-slate-400 block font-mono truncate">{ident.recipient_id}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
+            {/* Submit Button */}
             <button
               type="submit"
-              disabled={isEncrypting}
-              className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs transition-all flex items-center justify-center space-x-2 shadow-md hover:shadow-lg"
+              disabled={isEncrypting || !selectedFile}
+              className="w-full py-3 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-2 transition-all duration-200 shadow-md transform hover:scale-[1.01] active:scale-[0.99]"
             >
               {isEncrypting ? (
-                <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
+                  <span>Encrypting with ML-KEM-768...</span>
+                </>
               ) : (
-                <Lock className="w-4 h-4 text-white" />
+                <>
+                  <Lock className="w-4 h-4 text-amber-400" />
+                  <span>Encrypt PDF & Embed Recipient Slots</span>
+                </>
               )}
-              <span>{isEncrypting ? 'Encrypting & Generating ML-KEM Slots...' : 'Encrypt PDF & Embed Recipient Slots'}</span>
             </button>
           </form>
         </div>
 
-        {/* Right Column: Generated Packages & Active Distribution Status */}
+        {/* Right Column: Status & Distribution Result */}
         <div className="lg:col-span-5 space-y-4">
           {distributionResult ? (
-            <div className="liquid-glass-card p-6 space-y-4 border-emerald-500/30 bg-emerald-50/40">
-              <div className="flex items-center space-x-2 text-emerald-800">
-                <FileCheck className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-bold text-sm">Protected Document Ready</h3>
+            <div className="liquid-glass-card p-6 space-y-4 border-emerald-500/30 bg-emerald-50/20">
+              <div className="flex items-center space-x-2.5 text-emerald-700">
+                <CheckCircle2 className="w-5 h-5" />
+                <h3 className="font-extrabold text-sm text-slate-900">Protected PDF Ready</h3>
               </div>
 
-              <div className="space-y-1.5 text-xs text-slate-700 bg-white/70 p-3.5 rounded-2xl border border-emerald-100 shadow-xs">
-                <div>Document ID: <span className="font-mono font-bold text-slate-900">{distributionResult.doc_id}</span></div>
-                <div className="truncate">Document Hash: <span className="font-mono text-[10px] text-slate-600">{distributionResult.doc_hash_sha256}</span></div>
+              <div className="p-3 bg-white/80 rounded-xl border border-emerald-200/60 text-xs text-slate-700 space-y-1">
+                <div>Document: <span className="font-bold text-slate-900">{distributionResult.title}</span></div>
+                <div className="font-mono text-[10px] text-slate-500 truncate">ID: {distributionResult.doc_id}</div>
+                <div className="text-[10px] text-slate-600">Encrypted for {distributionResult.authorized_recipients?.length || distributionResult.recipients_count} recipients</div>
               </div>
 
-              <div className="space-y-2">
-                <a
-                  href={`${getApiBaseUrl()}/api/distribution/download/${distributionResult.doc_id}`}
-                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-md"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download Protected PDF</span>
-                </a>
-                <div className="text-[10px] text-slate-500 text-center">
-                  Share this single file with all {distributionResult.recipients?.length || distributionResult.packages?.length} recipients
+              {savedFilePath && (
+                <div className="p-2.5 bg-emerald-100/80 border border-emerald-300 rounded-xl text-[11px] text-emerald-900 space-y-1">
+                  <div className="font-bold">Saved to disk:</div>
+                  <div className="font-mono text-[10px] break-all">{savedFilePath}</div>
+                  <button
+                    onClick={() => openFolderForFile(savedFilePath)}
+                    className="flex items-center space-x-1 text-emerald-800 font-bold hover:underline pt-0.5"
+                  >
+                    <FolderOpen className="w-3.5 h-3.5" />
+                    <span>Open in Folder</span>
+                  </button>
                 </div>
-              </div>
+              )}
 
               <button
-                onClick={onGoToDecrypt}
-                className="w-full py-2.5 px-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-sm"
+                type="button"
+                onClick={() => handleSaveToDisk(distributionResult.doc_id, distributionResult.title, distributionResult.protected_pdf_base64)}
+                className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1.5 transition-all shadow-sm"
               >
-                <span>Proceed to Decrypt Workstation</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <Download className="w-4 h-4" />
+                <span>Save Protected PDF to Disk</span>
               </button>
+
+              {onGoToDecrypt && (
+                <button
+                  type="button"
+                  onClick={onGoToDecrypt}
+                  className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-1 transition-all"
+                >
+                  <span>Proceed to Decrypt Workstation</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           ) : (
-            <div className="liquid-glass-card p-6 space-y-4">
-              <h3 className="font-bold text-sm text-slate-900 flex items-center space-x-2">
-                <FileText className="w-4.5 h-4.5 text-blue-600" />
-                <span>Active Encrypted Packages</span>
+            <div className="liquid-glass-card p-6 space-y-3.5">
+              <h3 className="font-bold text-xs text-slate-800 flex items-center space-x-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                <span>Enclave Encrypted Repository</span>
               </h3>
-              <p className="text-xs text-slate-500">
-                Pre-seeded confidential document available for immediate testing:
+              <p className="text-[11px] text-slate-500">
+                Documents encrypted on the shared enclave:
               </p>
 
-              {activeDocs.map((doc) => (
-                <div key={doc.doc_id} className="p-4 rounded-xl bg-white/70 border border-slate-200/80 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-slate-900">{doc.title}</span>
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700">{doc.doc_id}</span>
-                  </div>
-                  <div className="text-[11px] text-slate-600 font-mono truncate">
-                    SHA256: {doc.doc_hash_sha256.substring(0, 24)}...
-                  </div>
-
-                  <div className="space-y-1.5 pt-1">
-                    <a
-                      href={`${getApiBaseUrl()}/api/distribution/download/${doc.doc_id}`}
-                      className="w-full py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 flex items-center justify-center space-x-1"
-                    >
-                      <Download className="w-3 h-3 text-blue-600" />
-                      <span>Download Protected PDF</span>
-                    </a>
-                  </div>
-                </div>
-              ))}
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {activeDocs.length === 0 ? (
+                  <p className="text-[11px] text-slate-400 italic">No encrypted documents distributed yet.</p>
+                ) : (
+                  activeDocs.map((doc) => (
+                    <div key={doc.doc_id} className="p-3 rounded-xl bg-white/70 border border-slate-200/80 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-slate-900 truncate">{doc.title}</span>
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{doc.doc_id}</span>
+                      </div>
+                      <a
+                        href={`${getApiBaseUrl()}/api/distribution/download/${doc.doc_id}`}
+                        download={`${doc.title || doc.doc_id}.pdf`}
+                        className="w-full py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-[10px] font-semibold text-slate-700 flex items-center justify-center space-x-1 transition-colors"
+                      >
+                        <Download className="w-3 h-3 text-blue-600" />
+                        <span>Download Protected PDF</span>
+                      </a>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </div>

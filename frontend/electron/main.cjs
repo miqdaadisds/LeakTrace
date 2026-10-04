@@ -1,18 +1,17 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
 const http = require('http');
-
 const fs = require('fs');
 
 // Persistent UserData in production, isolated temporary path in dev
 let userDataDir = null;
 if (!app.isPackaged) {
-  userDataDir = path.join(os.tmpdir(), `leaktrace-electron-${process.pid}`);
+  userDataDir = path.join(os.tmpdir(), `traceleak-electron-${process.pid}`);
   app.setPath('userData', userDataDir);
 } else {
-  userDataDir = path.join(app.getPath('appData'), 'LeakTrace');
+  userDataDir = path.join(app.getPath('appData'), 'TraceLeak');
   try { fs.mkdirSync(userDataDir, { recursive: true }); } catch (_) {}
   app.setPath('userData', userDataDir);
 }
@@ -81,7 +80,7 @@ function startPythonBackend() {
   }
 
   if (standaloneExe) {
-    console.log(`[LeakTrace] Launching Standalone backend executable from: ${standaloneExe}`);
+    console.log(`[TraceLeak] Launching Standalone backend executable from: ${standaloneExe}`);
     const exeDir = path.dirname(standaloneExe);
 
     // If persistent DB doesn't exist yet in AppData, seed it if a template exists
@@ -90,9 +89,9 @@ function startPythonBackend() {
       if (fs.existsSync(templateDb)) {
         try {
           fs.copyFileSync(templateDb, persistentDbPath);
-          console.log(`[LeakTrace] Seeded initial database to: ${persistentDbPath}`);
+          console.log(`[TraceLeak] Seeded initial database to: ${persistentDbPath}`);
         } catch (e) {
-          console.warn(`[LeakTrace] Failed to seed database: ${e.message}`);
+          console.warn(`[TraceLeak] Failed to seed database: ${e.message}`);
         }
       }
     }
@@ -114,7 +113,7 @@ function startPythonBackend() {
   } else {
     // Development fallback using system python
     const backendDir = path.resolve(__dirname, '../../backend');
-    console.log(`[LeakTrace] Standalone binary not found. Falling back to python worker: ${backendDir}`);
+    console.log(`[TraceLeak] Standalone binary not found. Falling back to python worker: ${backendDir}`);
 
     pythonProcess = spawn(
       'python',
@@ -142,13 +141,13 @@ function startPythonBackend() {
   });
 
   pythonProcess.on('exit', (code, signal) => {
-    console.log(`[LeakTrace] Backend worker exited with code ${code}, signal ${signal}`);
+    console.log(`[TraceLeak] Backend worker exited with code ${code}, signal ${signal}`);
   });
 }
 
 function killPythonBackend() {
   if (spawnedByUs && pythonProcess && pythonProcess.pid) {
-    console.log(`[LeakTrace] Terminating backend worker PID: ${pythonProcess.pid}`);
+    console.log(`[TraceLeak] Terminating backend worker PID: ${pythonProcess.pid}`);
     try {
       pythonProcess.kill();
     } catch (_) {}
@@ -163,7 +162,7 @@ function createWindow() {
     height: 920,
     minWidth: 1100,
     minHeight: 720,
-    title: 'LeakTrace',
+    title: 'TraceLeak',
     icon: iconPath,
     backgroundColor: '#f8fafc',
     webPreferences: {
@@ -175,9 +174,16 @@ function createWindow() {
     autoHideMenuBar: true,
   });
 
+  // Handle native file downloads gracefully
+  if (mainWindow.webContents.session) {
+    mainWindow.webContents.session.on('will-download', (event, item) => {
+      console.log(`[TraceLeak] Incoming download: ${item.getFilename()}`);
+    });
+  }
+
   // Block external window / popup creation
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    console.warn(`[LeakTrace Security] Denied window open request: ${url}`);
+    console.warn(`[TraceLeak Security] Denied window open request: ${url}`);
     return { action: 'deny' };
   });
 
@@ -193,7 +199,7 @@ function createWindow() {
       const isLocalhost = parsedUrl.origin === `http://127.0.0.1:${BACKEND_PORT}`;
       const isConfiguredRemote = isRemoteMode && parsedUrl.origin === new URL(remoteApiUrl).origin;
       if (!isLocalhost && !isConfiguredRemote && parsedUrl.protocol !== 'file:') {
-        console.warn(`[LeakTrace Security] Blocked external navigation: ${navigationUrl}`);
+        console.warn(`[TraceLeak Security] Blocked external navigation: ${navigationUrl}`);
         event.preventDefault();
       }
     } catch (_) {
@@ -212,6 +218,46 @@ function createWindow() {
   });
 }
 
+// Native Save File Dialog via IPC
+ipcMain.handle('save-file-dialog', async (event, { defaultFilename, base64Content, textContent, filters }) => {
+  try {
+    const defaultFilters = filters || [
+      { name: 'All Files (*.*)', extensions: ['*'] }
+    ];
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Save File - TraceLeak',
+      defaultPath: path.join(app.getPath('downloads'), defaultFilename || 'document.pdf'),
+      filters: defaultFilters
+    });
+    if (canceled || !filePath) {
+      return { success: false, canceled: true };
+    }
+    if (base64Content) {
+      const buffer = Buffer.from(base64Content, 'base64');
+      fs.writeFileSync(filePath, buffer);
+    } else if (textContent) {
+      fs.writeFileSync(filePath, textContent, 'utf-8');
+    }
+    console.log(`[TraceLeak] File successfully saved: ${filePath}`);
+    return { success: true, filePath };
+  } catch (err) {
+    console.error('[TraceLeak] Save file error:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('show-in-folder', async (event, filePath) => {
+  try {
+    if (filePath && fs.existsSync(filePath)) {
+      shell.showItemInFolder(filePath);
+      return { success: true };
+    }
+    return { success: false, error: 'File does not exist' };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 app.whenReady().then(async () => {
   const CENTRAL_DEFAULT_URL = 'https://leaktrace-backend.onrender.com';
   const isOfflineForced = process.env.LEAKTRACE_OFFLINE === '1' || process.env.LEAKTRACE_API_URL === 'offline';
@@ -219,7 +265,7 @@ app.whenReady().then(async () => {
   const isRemoteMode = Boolean(remoteApiUrl && !remoteApiUrl.includes('127.0.0.1') && !remoteApiUrl.includes('localhost'));
 
   if (isRemoteMode) {
-    console.log(`[LeakTrace] Connected Mode: Active Central Backend configured at ${remoteApiUrl}`);
+    console.log(`[TraceLeak] Connected Mode: Active Central Backend configured at ${remoteApiUrl}`);
     createWindow();
     return;
   }
@@ -229,23 +275,23 @@ app.whenReady().then(async () => {
     try {
       await checkBackendHealth(2, 200);
       alreadyRunning = true;
-      console.log('[LeakTrace] Active Python worker detected on port 8000. Reusing instance.');
+      console.log('[TraceLeak] Active Python worker detected on port 8000. Reusing instance.');
     } catch (_) {
       alreadyRunning = false;
     }
 
     if (!alreadyRunning) {
       startPythonBackend();
-      console.log('[LeakTrace] Awaiting Python backend initialization...');
+      console.log('[TraceLeak] Awaiting Python backend initialization...');
       await checkBackendHealth(30, 500);
-      console.log('[LeakTrace] Python backend is operational.');
+      console.log('[TraceLeak] Python backend is operational.');
     }
 
     createWindow();
   } catch (err) {
-    console.error('[LeakTrace] Failed to start background worker:', err);
+    console.error('[TraceLeak] Failed to start background worker:', err);
     dialog.showErrorBox(
-      'LeakTrace Enclave Startup Error',
+      'TraceLeak Enclave Startup Error',
       `Failed to initialize local cryptographic worker: ${err.message}`
     );
     app.quit();
