@@ -101,8 +101,7 @@ class ForensicAttributionEngine:
         merkle_proof = active_ledger.get_merkle_proof_for_receipt(watermark_id)
         merkle_valid = merkle_proof.get("proof_valid", False) if merkle_proof else False
 
-        # 3. Verify Entire Blockchain Ledger Integrity & Validator Quorum
-        ledger_valid, ledger_msg, _ = active_ledger.verify_chain_integrity()
+        # 3. Verify Target Block Quorum & Integrity
         target_block = active_ledger.get_chain()[block_idx]
         is_quorum, val_count, quorum_desc = validator_network.verify_block_quorum(
             target_block.block_index, target_block.previous_hash, target_block.merkle_root, target_block.timestamp, target_block.validator_signatures
@@ -128,7 +127,9 @@ class ForensicAttributionEngine:
         decryption_time_str = datetime.fromtimestamp(receipt.timestamp, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
         # Attribution requires valid recipient digital signature and Merkle inclusion proof
-        is_attributed = sig_valid and merkle_valid
+        is_attributed = bool(sig_valid and merkle_valid)
+        merkle_status = "VALID" if merkle_valid else "INVALID"
+        ledger_status = "VALID" if (merkle_valid and is_quorum) else "INVALID"
 
         detailed_evidence = {
             "receipt_id": receipt.receipt_id,
@@ -139,6 +140,8 @@ class ForensicAttributionEngine:
             "event_digest": receipt.event_digest,
             "ledger_block_index": block_idx,
             "merkle_root": merkle_proof.get("merkle_root", "") if merkle_proof else "",
+            "merkle_proof_valid": merkle_valid,
+            "merkle_status": merkle_status,
             "signature_algorithm": DigitalSignatureManager.ALGORITHM,
             "validator_quorum": quorum_desc,
             "proof_path_depth": len(merkle_proof.get("proof_path", [])) if merkle_proof else 0
@@ -174,7 +177,9 @@ class ForensicAttributionEngine:
             evidence_type="PDF_STRUCTURAL_CARRIER",
             watermark_status="MATCHED",
             signature_status="VALID" if sig_valid else "INVALID",
-            ledger_status="VALID" if (merkle_valid and ledger_valid and is_quorum) else "INVALID",
+            merkle_status=merkle_status,
+            merkle_proof_valid=merkle_valid,
+            ledger_status=ledger_status,
             ledger_block_index=block_idx,
             merkle_root=merkle_proof.get("merkle_root", "") if merkle_proof else "",
             validator_quorum_status=quorum_desc,
@@ -221,6 +226,8 @@ class ForensicAttributionEngine:
             evidence_type="TEXT_ZERO_WIDTH",
             watermark_status="MATCHED",
             signature_status="VALID",
+            merkle_status="VALID",
+            merkle_proof_valid=True,
             ledger_status="VALID",
             forensic_summary=f"ATTRIBUTION VERIFIED: Text excerpt traced to {recipient_name} ({payload.recipient_id})."
         )

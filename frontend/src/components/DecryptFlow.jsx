@@ -164,38 +164,38 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
   if (result) {
     return (
       <div className="max-w-md mx-auto mt-6">
-        <div className="liquid-glass-card p-7 text-center space-y-5 border-emerald-500/30 bg-emerald-50/20">
+        <div className="liquid-glass-card p-7 text-center space-y-5 border-emerald-500/30 bg-emerald-50/20 dark:bg-emerald-950/20 dark:border-emerald-500/30">
           <div className="flex flex-col items-center space-y-2.5">
             <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shadow-inner">
-              <CheckCircle2 className="w-7 h-7 text-emerald-600" />
+              <CheckCircle2 className="w-7 h-7 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Decryption Successful</h2>
-              <p className="text-xs text-slate-600 mt-0.5">
-                Officer: <span className="font-bold text-slate-800">{user?.name}</span>
+              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">Decryption Successful</h2>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                Officer: <span className="font-bold text-slate-800 dark:text-slate-200">{user?.name}</span>
               </p>
             </div>
           </div>
 
-          <div className="p-3 rounded-xl bg-white/80 border border-emerald-200/60 shadow-xs text-xs text-slate-700 space-y-1">
-            <div className="flex items-center justify-center space-x-1 font-bold text-slate-800">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <div className="p-3 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-emerald-200/60 dark:border-emerald-800/50 shadow-xs text-xs text-slate-700 dark:text-slate-300 space-y-1">
+            <div className="flex items-center justify-center space-x-1 font-bold text-slate-800 dark:text-slate-200">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span>Forensic Watermark Embedded</span>
             </div>
-            <p className="text-[10px] font-mono text-slate-500">
+            <p className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
               ID: {result.watermark_id} &bull; Block #{result.ledger_block_index}
             </p>
           </div>
 
           {savedPdfPath && (
-            <div className="p-2.5 bg-emerald-100/90 border border-emerald-300 rounded-xl text-[11px] text-emerald-900 space-y-1 text-left">
+            <div className="p-2.5 bg-emerald-100/90 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700 rounded-xl text-[11px] text-emerald-900 dark:text-emerald-200 space-y-1 text-left">
               <div className="font-bold flex items-center space-x-1">
                 <span>Saved to Filesystem</span>
               </div>
-              <div className="font-mono text-[10px] break-all text-slate-700">{savedPdfPath}</div>
+              <div className="font-mono text-[10px] break-all text-slate-700 dark:text-slate-300">{savedPdfPath}</div>
               <button
                 onClick={() => openFolderForFile(savedPdfPath)}
-                className="flex items-center space-x-1 text-emerald-800 font-bold hover:underline pt-0.5"
+                className="flex items-center space-x-1 text-emerald-800 dark:text-emerald-300 font-bold hover:underline pt-0.5"
               >
                 <FolderOpen className="w-3.5 h-3.5" />
                 <span>Show in Windows Explorer</span>
@@ -206,7 +206,7 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
           {/* Primary Action: Native Save As Dialog */}
           <button
             onClick={handleSavePdf}
-            className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 shadow-md transition-all duration-200 transform hover:scale-[1.01] active:scale-[0.99]"
+            className="w-full py-3 bg-slate-900 hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center justify-center space-x-2 shadow-md transition-all duration-200 transform hover:scale-[1.01] active:scale-[0.99]"
           >
             <Download className="w-4 h-4 text-amber-400" />
             <span>Save Decrypted PDF to Disk</span>
@@ -215,12 +215,12 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
           <div className="flex items-center justify-center space-x-4 text-xs pt-1">
             <button
               onClick={handleSaveReceipt}
-              className="text-blue-600 hover:text-blue-700 font-semibold hover:underline"
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-semibold hover:underline"
             >
               Save Receipt (.json)
             </button>
-            <span className="text-slate-300">|</span>
-            <button onClick={reset} className="text-slate-500 hover:text-slate-800 font-medium">
+            <span className="text-slate-300 dark:text-slate-600">|</span>
+            <button onClick={reset} className="text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 font-medium">
               Decrypt another
             </button>
           </div>
@@ -229,26 +229,42 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
     );
   }
 
+  const isPending = user?.role === 'pending' || user?.approved === false;
+
   return (
     <div className="max-w-md mx-auto mt-4 space-y-4">
+      {isPending && (
+        <div className="p-4 rounded-2xl bg-amber-50/90 dark:bg-amber-950/60 border border-amber-300/80 dark:border-amber-700/80 text-amber-900 dark:text-amber-200 text-xs space-y-1 shadow-sm">
+          <div className="font-extrabold flex items-center space-x-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+            <span>Awaiting Administrator Authorization</span>
+          </div>
+          <p className="opacity-90 leading-relaxed">
+            Your account is currently pending. Once the admin authorizes your account in their dashboard, your workstation will automatically unlock decryption capability in real-time.
+          </p>
+        </div>
+      )}
+
       <form onSubmit={handleDecrypt} className="liquid-glass-card p-7 space-y-5">
         <div className="text-center space-y-1 pb-1">
-          <div className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 mb-1">
+          <div className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 mb-1">
             <Unlock className="w-5 h-5" />
           </div>
-          <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Decrypt Document</h2>
-          <p className="text-xs text-slate-500">Authorized Officer: <span className="font-bold text-slate-800">{user?.name}</span></p>
+          <h2 className="text-lg font-extrabold text-slate-900 dark:text-white tracking-tight">Decrypt Document</h2>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Authorized Officer: <span className="font-bold text-slate-800 dark:text-slate-200">{user?.name}</span>
+          </p>
         </div>
 
         {error && (
-          <div className="p-3 rounded-xl bg-red-50/90 border border-red-200/80 text-xs text-red-700 font-medium text-center">
+          <div className="p-3 rounded-xl bg-red-50/90 dark:bg-red-950/60 border border-red-200/80 dark:border-red-800/80 text-xs text-red-700 dark:text-red-300 font-medium text-center">
             {error}
           </div>
         )}
 
         {/* 1. PRIMARY ACTION: Load Protected PDF directly from disk */}
         <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-800 block">
+          <label className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
             Protected PDF File <span className="text-red-500">*</span>
           </label>
 
@@ -265,8 +281,8 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
               }}
               className={`relative border-2 border-dashed rounded-2xl p-5 text-center transition-all duration-200 cursor-pointer ${
                 isDragging
-                  ? 'border-blue-500 bg-blue-50/70 scale-[1.01]'
-                  : 'border-slate-300 hover:border-blue-400 bg-white/60 hover:bg-white/90'
+                  ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 scale-[1.01]'
+                  : 'border-slate-300 hover:border-blue-400 bg-white/60 hover:bg-white/90 dark:bg-slate-800/50 dark:hover:bg-slate-800/80 dark:border-slate-700 dark:hover:border-blue-500'
               }`}
             >
               <input
@@ -276,28 +292,28 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
               <div className="flex flex-col items-center justify-center space-y-1.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center">
+                <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                   <Upload className="w-4.5 h-4.5" />
                 </div>
-                <p className="text-xs font-bold text-slate-800">
-                  Drop protected PDF here, or <span className="text-blue-600 underline">browse</span>
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                  Drop protected PDF here, or <span className="text-blue-600 dark:text-blue-400 underline">browse</span>
                 </p>
-                <p className="text-[10px] text-slate-400">Loads your encrypted document</p>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500">Loads your encrypted document</p>
               </div>
             </div>
           ) : (
-            <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-xl flex items-center justify-between shadow-xs">
+            <div className="p-3 bg-blue-50/80 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center justify-between shadow-xs">
               <div className="flex items-center space-x-2.5 truncate">
-                <FileText className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
                 <div className="truncate">
-                  <p className="text-xs font-bold text-blue-900 truncate">{customFile.name}</p>
-                  <p className="text-[10px] text-blue-600">{(customFile.size / 1024).toFixed(1)} KB &bull; Active file</p>
+                  <p className="text-xs font-bold text-blue-900 dark:text-blue-200 truncate">{customFile.name}</p>
+                  <p className="text-[10px] text-blue-600 dark:text-blue-400">{(customFile.size / 1024).toFixed(1)} KB &bull; Active file</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => { playClick(); setCustomFile(null); }}
-                className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                className="p-1 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 dark:hover:text-red-400 transition-colors"
                 title="Remove file"
               >
                 <X className="w-4 h-4" />
@@ -312,14 +328,14 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
             <button
               type="button"
               onClick={() => { playClick(); setShowRepoSelector(!showRepoSelector); }}
-              className="text-[11px] font-semibold text-slate-500 hover:text-blue-600 flex items-center space-x-1"
+              className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 flex items-center space-x-1"
             >
               <span>Or choose from central repository</span>
               {showRepoSelector ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
 
             {showRepoSelector && (
-              <div className="mt-2 space-y-1.5 p-3 rounded-xl bg-slate-50/80 border border-slate-200/80">
+              <div className="mt-2 space-y-1.5 p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700">
                 {activeDocs.length > 0 ? (
                   <select
                     value={selectedRepoDocId}
@@ -328,7 +344,7 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
                       setSelectedRepoDocId(e.target.value);
                       setCustomFile(null);
                     }}
-                    className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
                   >
                     <option value="">-- Choose document --</option>
                     {activeDocs.map((doc) => (
@@ -347,7 +363,7 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
 
         {/* 3. Passphrase Input */}
         <div className="space-y-1">
-          <label className="text-xs font-bold text-slate-800 block">
+          <label className="text-xs font-bold text-slate-800 dark:text-slate-200 block">
             Vault Passphrase
           </label>
           <div className="relative">
@@ -356,13 +372,13 @@ export default function DecryptFlow({ user, activeDocs = [], onDecrypted, onGoTo
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your credential passphrase"
-              className="w-full bg-white/90 border border-slate-200/90 rounded-xl pl-3 pr-10 py-2.5 text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-xs"
+              className="w-full bg-white/90 dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700 rounded-xl pl-3 pr-10 py-2.5 text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/40 shadow-xs"
               required
             />
             <button
               type="button"
               onClick={() => { playClick(); setShowPassword(!showPassword); }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 rounded-lg transition-colors"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 rounded-lg transition-colors"
             >
               {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
             </button>

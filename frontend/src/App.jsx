@@ -125,8 +125,13 @@ export default function App() {
         console.log('[Realtime Event Received]', event.event_type, event.data);
         if (event.event_type === 'USER_REGISTERED' || event.event_type === 'USER_APPROVED' || event.event_type === 'ROLE_CHANGED') {
           fetchIdentities().then(setIdentities).catch(() => {});
-          if (event.data?.recipient_id && user && event.data.recipient_id === user.recipient_id) {
-            setUser(prev => ({ ...prev, role: event.data.role }));
+          if (event.data?.recipient_id) {
+            setUser(prev => {
+              if (prev && (prev.recipient_id === event.data.recipient_id || prev.name === event.data.name)) {
+                return { ...prev, role: event.data.role, approved: event.data.role !== 'pending' };
+              }
+              return prev;
+            });
           }
         } else if (event.event_type === 'DOCUMENT_AUTHORIZED' || event.event_type === 'DOCUMENT_AVAILABLE') {
           fetchActiveDocuments().then(setActiveDocs).catch(() => {});
@@ -147,14 +152,24 @@ export default function App() {
     };
   }, []);
 
-  // Active Directory Refresh Polling when User is Logged In
+  // Active Directory & Current User Role Refresh Polling
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(() => {
       fetchIdentities().then(setIdentities).catch(() => {});
-    }, 4000);
+      getCurrentUser().then((me) => {
+        if (me && me.role) {
+          setUser((prev) => {
+            if (prev && prev.role !== me.role) {
+              return { ...prev, ...me, approved: me.role !== 'pending' };
+            }
+            return prev;
+          });
+        }
+      }).catch(() => {});
+    }, 3000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user?.recipient_id, user?.role]);
 
   const handleLogout = async () => {
     try {

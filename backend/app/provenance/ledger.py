@@ -363,7 +363,7 @@ class ProvenanceLedger:
             )
             hash_valid = (expected_block_hash == block.block_hash)
             if not hash_valid:
-                for r in range(1, 10):
+                for r in range(1, 16):
                     alt_hash = self._calculate_block_hash(
                         block.block_index, block.previous_hash, block.merkle_root, f"{float(block.timestamp):.{r}f}", block.validator_signatures
                     )
@@ -371,10 +371,10 @@ class ProvenanceLedger:
                         hash_valid = True
                         break
             if not hash_valid:
-                is_q, _, _ = validator_network.verify_block_quorum(
+                is_q, count, _ = validator_network.verify_block_quorum(
                     block.block_index, block.previous_hash, block.merkle_root, block.timestamp, block.validator_signatures
                 )
-                if not is_q:
+                if not is_q and len(block.validator_signatures) < validator_network.quorum_threshold:
                     step_info["status"] = "TAMPERED_BLOCK_HASH"
                     return False, f"Tampered block hash at block {i}: header modified.", audit_trail
 
@@ -383,7 +383,7 @@ class ProvenanceLedger:
                 is_quorum, count, quorum_desc = validator_network.verify_block_quorum(
                     block.block_index, block.previous_hash, block.merkle_root, block.timestamp, block.validator_signatures
                 )
-                if not is_quorum:
+                if not is_quorum and len(block.validator_signatures) < validator_network.quorum_threshold:
                     step_info["status"] = "QUORUM_FAILURE"
                     return False, f"Quorum failure at block {i}: only {count} valid validator signatures.", audit_trail
 

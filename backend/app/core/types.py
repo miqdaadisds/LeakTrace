@@ -78,6 +78,8 @@ class ForensicAttributionResult(BaseModel):
     watermark_status: str = "NOT_FOUND"  # "MATCHED", "CORRUPTED", "NOT_FOUND"
     signature_status: str = "UNVERIFIED"  # "VALID", "INVALID", "UNVERIFIED"
     ledger_status: str = "UNVERIFIED"     # "VALID", "INVALID", "UNVERIFIED"
+    merkle_status: str = "UNVERIFIED"     # "VALID", "INVALID", "UNVERIFIED"
+    merkle_proof_valid: bool = False
     ledger_block_index: Optional[int] = None
     merkle_root: Optional[str] = None
     validator_quorum_status: Optional[str] = None
